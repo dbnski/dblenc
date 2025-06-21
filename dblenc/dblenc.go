@@ -67,13 +67,13 @@ func (r Encoding) String() string {
     }
 }
 
-type byteMap struct {
-    Map  [256]bool
-    Next [256]*byteMap
+type ByteMap struct {
+    byteMap [256]bool
+    next    [256]*ByteMap
 }
 
-func newByteMap() *byteMap {
-    m := &byteMap{}
+func NewByteMap() *ByteMap {
+    m := &ByteMap{}
     buf := make([]byte, utf8.UTFMax)
     ptr := m
 
@@ -84,24 +84,24 @@ func newByteMap() *byteMap {
 
         if n == 1 {
             code := buf[0]
-            ptr.Map[code] = true
+            ptr.byteMap[code] = true
         } else {
             code := buf[0]
-            if ptr.Next[code] == nil {
-                ptr.Next[code] = &byteMap{}
+            if ptr.next[code] == nil {
+                ptr.next[code] = &ByteMap{}
             }
-            ptr := ptr.Next[code]
+            ptr := ptr.next[code]
             if n == 2 {
                 code = buf[1]
-                ptr.Map[code] = true
+                ptr.byteMap[code] = true
             } else {
                 code = buf[1]
-                if ptr.Next[code] == nil {
-                    ptr.Next[code] = &byteMap{}
+                if ptr.next[code] == nil {
+                    ptr.next[code] = &ByteMap{}
                 }
-                ptr := ptr.Next[code]
+                ptr := ptr.next[code]
                 code = buf[2]
-                ptr.Map[code] = true
+                ptr.byteMap[code] = true
             }
         }
     }
@@ -109,7 +109,7 @@ func newByteMap() *byteMap {
     return m
 }
 
-func (this *byteMap) detect(data []byte) (Encoding, int) {
+func (this *ByteMap) Detect(data []byte) (Encoding, int) {
     // Fast path for strings with long ascii prefixes.
     // Based on utf8.Valid().
     f := 0
@@ -135,21 +135,21 @@ func (this *byteMap) detect(data []byte) (Encoding, int) {
     for p < s {
         c := data[p]
         p++
-        if m.Map[c] {
+        if m.byteMap[c] {
             // ascii
             continue
         }
         if p == s {
             return ERROR, f + p
         }
-        m := m.Next[c]
+        m := m.next[c]
         if m == nil {
             return UNKNOWN, f + p
         }
 
         c = data[p]
         p++
-        if m.Map[c] {
+        if m.byteMap[c] {
             // complete double-encoded sequence (2 bytes)
             r = DOUBLE_ENCODED
             continue
@@ -157,14 +157,14 @@ func (this *byteMap) detect(data []byte) (Encoding, int) {
         if p == s {
             return ERROR, f + p
         }
-        m = m.Next[c]
+        m = m.next[c]
         if m == nil {
             return UNKNOWN, f + p
         }
 
         c = data[p]
         p++
-        if m.Map[c] {
+        if m.byteMap[c] {
             // complete double-encoded sequence (3 bytes)
             r = DOUBLE_ENCODED
             continue
@@ -176,13 +176,13 @@ func (this *byteMap) detect(data []byte) (Encoding, int) {
 }
 
 type UnDoubleEncoder struct {
-    byteMap *byteMap
+    byteMap *ByteMap
     runeMap []uint32
 }
 
 func NewUnDoubleEncoder() *UnDoubleEncoder {
     und := &UnDoubleEncoder{
-        byteMap: newByteMap(),
+        byteMap: NewByteMap(),
         runeMap: make([]uint32, len(charMap)),
     }
     for i := 0; i < len(charMap); i++ {
@@ -206,7 +206,7 @@ func (this *UnDoubleEncoder) Transform(b []byte) ([]byte, error) {
     //     )
     // }
 
-    enc, _ := this.byteMap.detect(b)
+    enc, _ := this.byteMap.Detect(b)
     o := b
     for enc == DOUBLE_ENCODED {
         x, err := this.transform(o)
@@ -253,7 +253,7 @@ func (this *UnDoubleEncoder) Transform(b []byte) ([]byte, error) {
         //         x, x[:], enc, at, len(x), utf8.Valid(x),
         //     )
         // }
-        enc, _ = this.byteMap.detect(x)
+        enc, _ = this.byteMap.Detect(x)
         valid := utf8.Valid(x)
         if !valid {
             break

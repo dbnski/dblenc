@@ -149,11 +149,11 @@ func TestDetect(t *testing.T) {
         },
     }
 
-    bm := newByteMap()
+    bm := NewByteMap()
 
     for _, tc := range tests {
         t.Run(tc.Name, func(t *testing.T) {
-            enc, at := bm.detect(tc.Input)
+            enc, at := bm.Detect(tc.Input)
             assert.Equal(t, tc.ReturnValue.Encoding, enc)
             assert.Equal(t, tc.ReturnValue.At, at)
         })
@@ -213,11 +213,11 @@ func BenchmarkDetectAsciiShort(b *testing.B) {
     buf, err := hex.DecodeString(asciiShort)
     assert.NoError(b, err)
 
-    bm := newByteMap()
+    bm := NewByteMap()
 
     b.ResetTimer()
     for i := 0; i < b.N; i++ {
-        bm.detect(buf)
+        bm.Detect(buf)
     }
 }
 
@@ -225,11 +225,11 @@ func BenchmarkDetectAsciiLong(b *testing.B) {
     buf, err := hex.DecodeString(asciiLong)
     assert.NoError(b, err)
 
-    bm := newByteMap()
+    bm := NewByteMap()
 
     b.ResetTimer()
     for i := 0; i < b.N; i++ {
-        bm.detect(buf)
+        bm.Detect(buf)
     }
 }
 
@@ -237,11 +237,11 @@ func BenchmarkDetectUtf8Only(b *testing.B) {
     buf, err := hex.DecodeString(utf8Only)
     assert.NoError(b, err)
 
-    bm := newByteMap()
+    bm := NewByteMap()
 
     b.ResetTimer()
     for i := 0; i < b.N; i++ {
-        bm.detect(buf)
+        bm.Detect(buf)
     }
 }
 
@@ -249,10 +249,10 @@ func BenchmarkDetectDoubleEncoded(b *testing.B) {
     buf, err := hex.DecodeString(utf8DblEnc)
     assert.NoError(b, err)
 
-    bm := newByteMap()
+    bm := NewByteMap()
 
     b.ResetTimer()
     for i := 0; i < b.N; i++ {
-        bm.detect(buf)
+        bm.Detect(buf)
     }
 }
