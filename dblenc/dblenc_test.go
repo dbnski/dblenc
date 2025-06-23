@@ -7,20 +7,164 @@ import (
     "github.com/stretchr/testify/assert"
 )
 
-var (
-    asciiShort           = "616C61206D61"
-    asciiLong            = "616C61206D61206B6F746120616C6120"
-    utf8Only             = "C2A72EE280A2C2B4C2A827C2B0C3B7E280A22E2EC397202020F09F8E802020F09D929EF09D92BDF09D92B6F09D9387F09D92B6F09D92B8F09D9389F09D9192F09D9387F09D93887E2020F09F8E80202020C3972E2EE280A2C3B7C2B027C2A8C2B4E280A22EC2A7"
-    utf8DblEnc           = "C3A0C2A6E280A0C3A0C2A6C59320C3A0C2A6C2ACC3A0C2A6C2BFC3A0C2A6C2B6C3A0C2A7C28DC3A0C2A6C2AC20C3A0C2A6C2ADC3A0C2A6C2BEC3A0C2A6C2B2C3A0C2A6C2ACC3A0C2A6C2BEC3A0C2A6C2B8C3A0C2A6C2BE20C3A0C2A6C2A6C3A0C2A6C2BFC3A0C2A6C2ACC3A0C2A6C2B8"
-    utf8TrplEnc          = "C383C692C382C2A5C383E2809AC382C2A4C383E2809AC382C2A7C383C692C382C2A7C383E280B9C3A2E282ACC2A0C383C2A2C3A2E2809AC2ACC382C2A0C383C692C382C2A7C383C2A2C3A2E282ACC5BEC382C2A2C383E2809AC382C2BA"
-    utf8DblEncTrunc      = "C3A5C2A4C2A7C3A7CB86E280A0C3A7E284A2"
+type TestCase struct {
+    Name              string
+    Original          string
+    OriginalHex       []byte
+    DoubleEncoded     string
+    DoubleEncodedHex  []byte
+    TransformHex      []byte
+    TransformError    error
+    TransformedHex    []byte
+    TransformedError  error
+}
 
-    asciiShortCheck      = "616C61206D61"
-    asciiLongCheck       = "616C61206D61206B6F746120616C6120"
-    utf8OnlyCheck        = "C2A72EE280A2C2B4C2A827C2B0C3B7E280A22E2EC397202020F09F8E802020F09D929EF09D92BDF09D92B6F09D9387F09D92B6F09D92B8F09D9389F09D9192F09D9387F09D93887E2020F09F8E80202020C3972E2EE280A2C3B7C2B027C2A8C2B4E280A22EC2A7"
-    utf8DblEncCheck      = "E0A686E0A69C20E0A6ACE0A6BFE0A6B6E0A78DE0A6AC20E0A6ADE0A6BEE0A6B2E0A6ACE0A6BEE0A6B8E0A6BE20E0A6A6E0A6BFE0A6ACE0A6B8"
-    utf8TrplEncCheck     = "E5A4A7E78886E799BA"
-    utf8DblEncTruncCheck = "E5A4A7E78886"
+var testCases = []TestCase{
+    {
+        Name:             "ASCII_Hello",
+        Original:         "Hello!",
+        OriginalHex:      []byte("Hello!"),
+        DoubleEncoded:    "Hello!",
+        DoubleEncodedHex: []byte("Hello!"),
+        TransformHex:     []byte("Hello!"),
+        TransformedHex:   []byte("Hello!"),
+    },
+    {
+        Name:             "UTF8_Japanese",
+        Original:         "全然分からない",
+        OriginalHex:      decode("e585a8e784b6e58886e3818be38289e381aae38184"),
+        DoubleEncoded:    "å…¨ç„¶åˆ†ã‹ã‚‰ãªã„",
+        DoubleEncodedHex: decode("c3a5e280a6c2a8c3a7e2809ec2b6c3a5cb86e280a0c3a3c281e280b9c3a3e2809ae280b0c3a3c281c2aac3a3c281e2809e"),
+        TransformHex:     decode("e585a8e784b6e58886e3818be38289e381aae38184"),
+        TransformedHex:   decode("e585a8e784b6e58886e3818be38289e381aae38184"),
+    },
+    {
+        Name:             "UTF8_Bengali",
+        Original:         "আজ বিশ্ব ভালবাসা দিবস",
+        OriginalHex:      decode("e0a686e0a69c20e0a6ace0a6bfe0a6b6e0a78de0a6ac20e0a6ade0a6bee0a6b2e0a6ace0a6bee0a6b8e0a6be20e0a6a6e0a6bfe0a6ace0a6b8"),
+        DoubleEncoded:    "à¦†à¦œ à¦¬à¦¿à¦¶à§à¦¬ à¦­à¦¾à¦²à¦¬à¦¾à¦¸à¦¾ à¦¦à¦¿à¦¬à¦¸",
+        DoubleEncodedHex: decode("c3a0c2a6e280a0c3a0c2a6c59320c3a0c2a6c2acc3a0c2a6c2bfc3a0c2a6c2b6c3a0c2a7c28dc3a0c2a6c2ac20c3a0c2a6c2adc3a0c2a6c2bec3a0c2a6c2b2c3a0c2a6c2acc3a0c2a6c2bec3a0c2a6c2b8c3a0c2a6c2be20c3a0c2a6c2a6c3a0c2a6c2bfc3a0c2a6c2acc3a0c2a6c2b8"),
+        TransformHex:     decode("e0a686e0a69c20e0a6ace0a6bfe0a6b6e0a78de0a6ac20e0a6ade0a6bee0a6b2e0a6ace0a6bee0a6b8e0a6be20e0a6a6e0a6bfe0a6ace0a6b8"),
+        TransformedHex:   decode("e0a686e0a69c20e0a6ace0a6bfe0a6b6e0a78de0a6ac20e0a6ade0a6bee0a6b2e0a6ace0a6bee0a6b8e0a6be20e0a6a6e0a6bfe0a6ace0a6b8"),
+    },
+    {
+        Name:             "UTF8_Short_Emoji",
+        Original:         "🙂",
+        OriginalHex:      decode("f09f9982"),
+        DoubleEncoded:    "ðŸ™‚",
+        DoubleEncodedHex: decode("c3b0c5b8e284a2e2809a"),
+        TransformHex:     decode("f09f9982"),
+        TransformedHex:   decode("f09f9982"),
+    },
+    {
+        Name:             "UTF8_Long_Emoji",
+        Original:         "🚵🏻‍♀️",
+        OriginalHex:      decode("f09f9ab5f09f8fbbe2808de29980efb88f"),
+        DoubleEncoded:    "ðŸ™‚",
+        DoubleEncodedHex: decode("c3b0c5b8c5a1c2b5c3b0c5b8c28fc2bbc3a2e282acc28dc3a2e284a2e282acc3afc2b8c28f"),
+        TransformHex:     decode("f09f9ab5f09f8fbbe2808de29980efb88f"),
+        TransformedHex:   decode("f09f9ab5f09f8fbbe2808de29980efb88f"),
+    },
+    {
+        Name:             "UTF8_Text",
+        Original:         "§.•´¨'°÷•..×   🎀  𝒞𝒽𝒶𝓇𝒶𝒸𝓉𝑒𝓇𝓈  🎀   ×..•÷°'¨´•.§",
+        OriginalHex:      decode("c2a72ee280a2c2b4c2a827c2b0c3b7e280a22e2ec397202020f09f8e802020f09d929ef09d92bdf09d92b6f09d9387f09d92b6f09d92b8f09d9389f09d9192f09d9387f09d93882020f09f8e80202020c3972e2ee280a2c3b7c2b027c2a8c2b4e280a22ec2a7"),
+        DoubleEncoded:    "Â§.â€¢Â´Â¨'Â°Ã·â€¢..Ã—   ðŸŽ€  ð’žð’½ð’¶ð“‡ð’¶ð’¸ð“‰ð‘’ð“‡ð“ˆ  ðŸŽ€   Ã—..â€¢Ã·Â°'Â¨Â´â€¢.Â§",
+        DoubleEncodedHex: decode("c382c2a72ec3a2e282acc2a2c382c2b4c382c2a827c382c2b0c383c2b7c3a2e282acc2a22e2ec383e28094202020c3b0c5b8c5bde282ac2020c3b0c29de28099c5bec3b0c29de28099c2bdc3b0c29de28099c2b6c3b0c29de2809ce280a1c3b0c29de28099c2b6c3b0c29de28099c2b8c3b0c29de2809ce280b0c3b0c29de28098e28099c3b0c29de2809ce280a1c3b0c29de2809ccb862020c3b0c5b8c5bde282ac202020c383e280942e2ec3a2e282acc2a2c383c2b7c382c2b027c382c2a8c382c2b4c3a2e282acc2a22ec382c2a7"),
+        TransformHex:     decode("c2a72ee280a2c2b4c2a827c2b0c3b7e280a22e2ec397202020f09f8e802020f09d929ef09d92bdf09d92b6f09d9387f09d92b6f09d92b8f09d9389f09d9192f09d9387f09d93882020f09f8e80202020c3972e2ee280a2c3b7c2b027c2a8c2b4e280a22ec2a7"),
+        TransformedHex:   decode("c2a72ee280a2c2b4c2a827c2b0c3b7e280a22e2ec397202020f09f8e802020f09d929ef09d92bdf09d92b6f09d9387f09d92b6f09d92b8f09d9389f09d9192f09d9387f09d93882020f09f8e80202020c3972e2ee280a2c3b7c2b027c2a8c2b4e280a22ec2a7"),
+    },
+    {
+        Name:             "UTF8_Complete",
+        Original:         "wąż",
+        OriginalHex:      decode("77c485c5bc"),
+        DoubleEncoded:    "wÄ…Å¼",
+        DoubleEncodedHex: decode("77c384e280a6c385c2bc"),
+        TransformHex:     decode("77c485c5bc"),
+        TransformedHex:   decode("77c485c5bc"),
+    },
+    {
+        Name:             "UTF8_Malformed_Suffix_Outer",
+        Original:         "wąż",
+        OriginalHex:      decode("77c485c5bc"),
+        DoubleEncoded:    "wÄ…Å�",
+        DoubleEncodedHex: decode("77c384e280a6c385c2"),
+        TransformHex:     nil,
+        TransformError:   ErrInvalid,
+        TransformedHex:   decode("77c485"),
+    },
+    {
+        Name:             "UTF8_Malformed_Suffix_Inner",
+        Original:         "wąż",
+        OriginalHex:      decode("77c485c5bc"),
+        DoubleEncoded:    "wÄ…Å",
+        DoubleEncodedHex: decode("77c384e280a6c385"),
+        TransformHex:     decode("77c485c5"),
+        TransformedHex:   decode("77c485"),
+    },
+    {
+        Name:             "UTF8_Malformed_Infix_Outer",
+        Original:         "wąż",
+        OriginalHex:      decode("77c485c5bc"),
+        DoubleEncoded:    "wÄ…�¼",
+        DoubleEncodedHex: decode("77c384e280a6c300c2bc"),
+        TransformHex:     nil,
+        TransformError:   ErrInvalid,
+        TransformedHex:   decode("77c384e280a6c300c2bc"),
+    },
+    {
+        Name:             "UTF8_Malformed_Infix_Inner",
+        Original:         "w�ż",
+        OriginalHex:      decode("77c400c5bc"),
+        DoubleEncoded:    "wÄ Å¼",
+        DoubleEncodedHex: decode("77c38400c385c2bc"),
+        TransformHex:     decode("77c400c5bc"),
+        TransformedHex:   decode("77c38400c385c2bc"),
+    },
+    {
+        Name:             "UTF8_Triple_Encoded",
+        Original:         "wąż",
+        OriginalHex:      decode("77c485c5bc"),
+        DoubleEncoded:    "wÃ„â€¦Ã…Â¼",
+        DoubleEncodedHex: decode("77c383e2809ec3a2e282acc2a6c383e280a6c382c2bc"),
+        TransformHex:     decode("77c384e280a6c385c2bc"),
+        TransformedHex:   decode("77c485c5bc"),
+    },
+    {
+        Name:             "UTF8_Triple_Encoded_Truncated_1",
+        Original:         "wąż",
+        OriginalHex:      decode("77c485c5bc"),
+        DoubleEncoded:    "wÃ„â€¦Ã…Â",
+        DoubleEncodedHex: decode("77c383e2809ec3a2e282acc2a6c383e280a6c382c2"),
+        TransformHex:     nil,
+        TransformError:   ErrInvalid,
+        TransformedHex:   decode("77c485"),
+    },
+    {
+        Name:             "UTF8_Triple_Encoded_Truncated_2",
+        Original:         "wąż",
+        OriginalHex:      decode("77c485c5bc"),
+        DoubleEncoded:    "wÃ„â€¦Ã…",
+        DoubleEncodedHex: decode("77c383e2809ec3a2e282acc2a6c383e280a6c382"),
+        TransformHex:     decode("77c384e280a6c385c2"),
+        TransformedHex:   decode("77c485"),
+    },
+    {
+        Name:             "UTF8_Quarduple_Encoded",
+        Original:         "wąż",
+        OriginalHex:      decode("77c485c5bc"),
+        DoubleEncoded:    "wÃƒâ€žÃ¢â‚¬Â¦Ãƒâ€¦Ã‚Â¼",
+        DoubleEncodedHex: decode("77c383c692c3a2e282acc5bec383c2a2c3a2e2809ac2acc382c2a6c383c692c3a2e282acc2a6c383e2809ac382c2bc"),
+        TransformHex:     decode("77c383e2809ec3a2e282acc2a6c383e280a6c382c2bc"),
+        TransformedHex:   decode("77c485c5bc"),
+    },
+}
+
+var (
+    asciiShort        = decode("20202020202020")
+    asciiLong         = decode("2020202020202020")
+    utf8Encoded       = decode("e8a5bfe38282e69db1e38282e58886e3818be38289e381aae38184")
+    utf8DoubleEncoded = decode("c3a8c2a5c2bfc3a3e2809ae2809ac3a6c29dc2b1c3a3e2809ae2809ac3a5cb86e280a0c3a3c281e280b9c3a3e2809ae280b0c3a3c281c2aac3a3c281e2809e")
 )
 
 func decode(s string) []byte {
@@ -32,88 +176,50 @@ func decode(s string) []byte {
 }
 
 func TestTransform(t *testing.T) {
-    tests := []struct {
-        Name        string
-        Input       []byte
-        ReturnValue []byte
-        ReturnError error
-    }{
-        {
-            Name:        "short-ascii",
-            Input:       decode(asciiShort),
-            ReturnValue: decode(asciiShortCheck),
-            ReturnError: nil,
-        },
-        {
-            Name:        "utf8-only",
-            Input:       decode(utf8Only),
-            ReturnValue: []byte(nil),
-            ReturnError: ErrInvalid,
-        },
-        {
-            Name:        "double-encoded",
-            Input:       decode(utf8DblEnc),
-            ReturnValue: decode(utf8DblEncCheck),
-            ReturnError: nil,
-        },
-    }
-
     und := NewUnDoubleEncoder()
 
-    for _, tc := range tests {
+    for _, tc := range testCases {
         t.Run(tc.Name, func(t *testing.T) {
-            b, err := und.transform(tc.Input)
-            assert.ErrorIs(t, err, tc.ReturnError)
-            assert.Equal(t, b, tc.ReturnValue)
+            r, err := und.transform(tc.DoubleEncodedHex)
+            assert.ErrorIs(t, err, tc.TransformError)
+            assert.Equal(t, r, tc.TransformHex)
         })
     }
 }
 
 func BenchmarkTransformAsciiShort(b *testing.B) {
-    buf, err := hex.DecodeString(asciiShort)
-    assert.NoError(b, err)
-
     und := NewUnDoubleEncoder()
 
     b.ResetTimer()
     for i := 0; i < b.N; i++ {
-        und.transform(buf)
+        und.transform(asciiShort)
     }
 }
 
 func BenchmarkTransformAsciiLong(b *testing.B) {
-    buf, err := hex.DecodeString(asciiLong)
-    assert.NoError(b, err)
-
     und := NewUnDoubleEncoder()
 
     b.ResetTimer()
     for i := 0; i < b.N; i++ {
-        und.transform(buf)
+        und.transform(asciiLong)
     }
 }
 
 func BenchmarkTransformUtf8Only(b *testing.B) {
-    buf, err := hex.DecodeString(utf8Only)
-    assert.NoError(b, err)
-
     und := NewUnDoubleEncoder()
 
     b.ResetTimer()
     for i := 0; i < b.N; i++ {
-        und.transform(buf)
+        und.transform(utf8Encoded)
     }
 }
 
-func BenchmarkTransformDoubleEncoded(b *testing.B) {
-    buf, err := hex.DecodeString(utf8DblEnc)
-    assert.NoError(b, err)
-
+func BenchmarkTransformEncoded(b *testing.B) {
     und := NewUnDoubleEncoder()
 
     b.ResetTimer()
     for i := 0; i < b.N; i++ {
-        und.transform(buf)
+        und.transform(utf8DoubleEncoded)
     }
 }
 
@@ -129,23 +235,23 @@ func TestDetect(t *testing.T) {
     }{
         {
             Name:        "short-ascii",
-            Input:       decode(asciiShort),
-            ReturnValue: ReturnValue{ ASCII, 6 },
+            Input:       asciiShort,
+            ReturnValue: ReturnValue{ ASCII, 7 },
         },
         {
             Name:        "long-ascii",
-            Input:       decode(asciiLong),
-            ReturnValue: ReturnValue{ ASCII, 16 },
+            Input:       asciiLong,
+            ReturnValue: ReturnValue{ ASCII, 8 },
         },
         {
-            Name:        "utf8-only",
-            Input:       decode(utf8Only),
-            ReturnValue: ReturnValue{ UNKNOWN, 26 },
+            Name:        "utf8-encoded",
+            Input:       utf8Encoded,
+            ReturnValue: ReturnValue{ UNKNOWN, 1 },
         },
         {
-            Name:        "double-encoded",
-            Input:       decode(utf8DblEnc),
-            ReturnValue: ReturnValue{ DOUBLE_ENCODED, 112 },
+            Name:        "utf8-double-encoded",
+            Input:       utf8DoubleEncoded,
+            ReturnValue: ReturnValue{ DOUBLE_ENCODED, 63 },
         },
     }
 
@@ -160,99 +266,50 @@ func TestDetect(t *testing.T) {
     }
 }
 
-func TestTransformEndToEnd(t *testing.T) {
-    tests := []struct {
-        Name        string
-        Input       []byte
-        ReturnValue []byte
-    }{
-        {
-            Name:        "short-ascii",
-            Input:       decode(asciiShort),
-            ReturnValue: decode(asciiShortCheck),
-        },
-        {
-            Name:        "long-ascii",
-            Input:       decode(asciiLong),
-            ReturnValue: decode(asciiLongCheck),
-        },
-        {
-            Name:        "utf8-only",
-            Input:       decode(utf8Only),
-            ReturnValue: decode(utf8OnlyCheck),
-        },
-        {
-            Name:        "double-encoded",
-            Input:       decode(utf8DblEnc),
-            ReturnValue: decode(utf8DblEncCheck),
-        },
-        {
-            Name:        "triple-encoded",
-            Input:       decode(utf8TrplEnc),
-            ReturnValue: decode(utf8TrplEncCheck),
-        },
-        {
-            Name:        "double-encoded-truncated",
-            Input:       decode(utf8DblEncTrunc),
-            ReturnValue: decode(utf8DblEncTruncCheck),
-        },
-    }
-
+func TestTransformed(t *testing.T) {
     und := NewUnDoubleEncoder()
 
-    for _, tc := range tests {
+    for _, tc := range testCases {
         t.Run(tc.Name, func(t *testing.T) {
-            b, err := und.Transform(tc.Input)
-            assert.NoError(t, err)
-            assert.Equal(t, tc.ReturnValue, b)
+            r, err := und.Transform(tc.DoubleEncodedHex)
+            assert.ErrorIs(t, err, tc.TransformedError)
+            assert.Equal(t, r, tc.TransformedHex)
         })
     }
 }
 
 func BenchmarkDetectAsciiShort(b *testing.B) {
-    buf, err := hex.DecodeString(asciiShort)
-    assert.NoError(b, err)
-
     bm := NewByteMap()
 
     b.ResetTimer()
     for i := 0; i < b.N; i++ {
-        bm.Detect(buf)
+        bm.Detect(asciiShort)
     }
 }
 
 func BenchmarkDetectAsciiLong(b *testing.B) {
-    buf, err := hex.DecodeString(asciiLong)
-    assert.NoError(b, err)
-
     bm := NewByteMap()
 
     b.ResetTimer()
     for i := 0; i < b.N; i++ {
-        bm.Detect(buf)
+        bm.Detect(asciiLong)
     }
 }
 
 func BenchmarkDetectUtf8Only(b *testing.B) {
-    buf, err := hex.DecodeString(utf8Only)
-    assert.NoError(b, err)
-
     bm := NewByteMap()
 
     b.ResetTimer()
     for i := 0; i < b.N; i++ {
-        bm.Detect(buf)
+        bm.Detect(utf8Encoded)
     }
 }
 
 func BenchmarkDetectDoubleEncoded(b *testing.B) {
-    buf, err := hex.DecodeString(utf8DblEnc)
-    assert.NoError(b, err)
-
     bm := NewByteMap()
 
     b.ResetTimer()
     for i := 0; i < b.N; i++ {
-        bm.Detect(buf)
+        bm.Detect(utf8DoubleEncoded)
     }
 }

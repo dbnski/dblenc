@@ -199,15 +199,40 @@ func NewUnDoubleEncoder() *UnDoubleEncoder {
 
 func (this *UnDoubleEncoder) Transform(b []byte) ([]byte, error) {
     // {
-    //     enc, at := this.Detect(b)
+    //     enc, at := this.byteMap.Detect(b)
     //     fmt.Printf(
     //         "INPUT:\nstr   = %s\nhex   = %x\ntest  = %v [at %d/%d]\n\n",
     //         b, b[:], enc, at, len(b),
     //     )
     // }
-
-    enc, _ := this.byteMap.Detect(b)
     o := b
+
+    enc, _ := this.byteMap.Detect(o)
+    // try to recover from an invalid trailing sequence
+    if enc == ERROR {
+        for p := len(b) - 1; p >= 0 && p >= len(b) - 2; p-- {
+            if o[p] == 0xC2 || o[p] == 0xC3 || o[p] == 0xC5 ||
+                o[p] == 0xC6 || o[p] == 0xCB || o[p] == 0xE2 {
+                // {
+                //     _enc, _ := this.byteMap.Detect(b[p:])
+                //     fmt.Printf(
+                //         "\tSUFFIX CHECK:\n\tstr   = %s\n\thex   = " +
+                //         "%x\n\tat    = %d/%d\n\ttest  = %v\n\n",
+                //         string(b[p:]), b[p:], p + 1, len(b), _enc,
+                //     )
+                // }
+
+                // re-check the shorter string
+                enc, _ = this.byteMap.Detect(o[:p])
+                if enc != ERROR {
+                    // discard the broken sequence
+                    o = o[:p]
+                }
+                break
+            }
+        }
+    }
+
     for enc == DOUBLE_ENCODED {
         x, err := this.transform(o)
         if err != nil {
@@ -217,7 +242,7 @@ func (this *UnDoubleEncoder) Transform(b []byte) ([]byte, error) {
         // validate the suffix if it's not an ascii char
         if x[len(x) - 1] >= 0x80 {
             p := len(x) - 1
-            // search for the start of a utf8 sequence in the last four bytes
+            // search for the start of a utf8 sequence
             for p >= 0 && p >= len(x) - 4 {
                 if x[p] >= 0xC2 && x[p] <= 0xF4 {
                     // {
@@ -231,7 +256,7 @@ func (this *UnDoubleEncoder) Transform(b []byte) ([]byte, error) {
 
                     valid := utf8.Valid(x[p:])
                     if !valid {
-                        // discard the incomplete sequence
+                        // the sequence is invalid, discard it
                         x = x[:p]
                     }
                     break
@@ -245,23 +270,23 @@ func (this *UnDoubleEncoder) Transform(b []byte) ([]byte, error) {
         }
 
         // {
-        //     enc, at = this.Detect(x)
+        //     enc, at := this.byteMap.Detect(x)
         //     valid := utf8.Valid(x)
         //     fmt.Printf(
         //         "\tPASS:\n\tstr   = %s\n\thex   = %x\n\ttest  = %v " +
         //         "[at %d/%d]\n\tvalid = %v\n\n",
-        //         x, x[:], enc, at, len(x), utf8.Valid(x),
+        //         x, x[:], enc, at, len(x), valid,
         //     )
         // }
         enc, _ = this.byteMap.Detect(x)
         valid := utf8.Valid(x)
         if !valid {
+            // this iteration got us nowhere good
             break
         }
 
-        o = x   // new candidate
+        o = x  // new candidate
     }
-
     // fmt.Printf("OUTPUT:\nstr   = %s\nhex   = %x\n\n\n", o, o[:])
 
     return o, nil
