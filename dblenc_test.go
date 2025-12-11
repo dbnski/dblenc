@@ -163,8 +163,8 @@ var testCases = []TestCase{
 var (
     asciiShort        = decode("20202020202020")
     asciiLong         = decode("2020202020202020")
-    utf8Encoded       = decode("e8a5bfe38282e69db1e38282e58886e3818be38289e381aae38184")
-    utf8DoubleEncoded = decode("c3a8c2a5c2bfc3a3e2809ae2809ac3a6c29dc2b1c3a3e2809ae2809ac3a5cb86e280a0c3a3c281e280b9c3a3e2809ae280b0c3a3c281c2aac3a3c281e2809e")
+    utf8Encoded       = decode("20e8a5bfe38282e69db1e38282e58886e3818be38289e381aae38184")
+    utf8DoubleEncoded = decode("2020c3a8c2a5c2bfc3a3e2809ae2809ac3a6c29dc2b1c3a3e2809ae2809ac3a5cb86e280a0c3a3c281e280b9c3a3e2809ae280b0c3a3c281c2aac3a3c281e2809e")
 )
 
 func decode(s string) []byte {
@@ -246,12 +246,12 @@ func TestDetect(t *testing.T) {
         {
             Name:        "utf8-encoded",
             Input:       utf8Encoded,
-            ReturnValue: ReturnValue{ UNKNOWN, 1 },
+            ReturnValue: ReturnValue{ UNKNOWN, 2 },
         },
         {
             Name:        "utf8-double-encoded",
             Input:       utf8DoubleEncoded,
-            ReturnValue: ReturnValue{ DOUBLE_ENCODED, 63 },
+            ReturnValue: ReturnValue{ DOUBLE_ENCODED, 3 },
         },
     }
 

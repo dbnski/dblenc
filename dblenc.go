@@ -131,6 +131,7 @@ func (this *ByteMap) Detect(data []byte) (Encoding, int) {
     p := 0
     m := this
     s := len(data)
+    o := s
     r := ASCII
     for p < s {
         c := data[p]
@@ -152,6 +153,7 @@ func (this *ByteMap) Detect(data []byte) (Encoding, int) {
         if m.byteMap[c] {
             // complete double-encoded sequence (2 bytes)
             r = DOUBLE_ENCODED
+            o = min(o, p - 1)
             continue
         }
         if p == s {
@@ -172,7 +174,7 @@ func (this *ByteMap) Detect(data []byte) (Encoding, int) {
         return UNKNOWN, f + p
     }
 
-    return r, f + p
+    return r, f + min(o, p)
 }
 
 type UnDoubleEncoder struct {
