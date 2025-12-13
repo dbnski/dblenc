@@ -2,7 +2,6 @@ package dblenc
 
 import (
     "errors"
-    "fmt"
     "sort"
     "unicode/utf8"
 )
