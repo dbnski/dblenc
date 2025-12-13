@@ -2,7 +2,7 @@ package dblenc
 
 import (
     "errors"
-    // "fmt"
+    "fmt"
     "sort"
     "unicode/utf8"
 )
@@ -49,6 +49,7 @@ var charMap = [256]uint32{
 type Encoding byte
 const (
     ASCII          Encoding = iota
+    INCOMPLETE
     DOUBLE_ENCODED
     ERROR
     UNKNOWN
@@ -58,6 +59,8 @@ func (r Encoding) String() string {
     switch r {
     case ASCII:
         return "ascii"
+    case INCOMPLETE:
+        return "incomplete"
     case DOUBLE_ENCODED:
         return "double-encoded"
     case ERROR:
@@ -110,8 +113,7 @@ func NewByteMap() *ByteMap {
 }
 
 func (this *ByteMap) Detect(data []byte) (Encoding, int) {
-    // Fast path for strings with long ascii prefixes.
-    // Based on utf8.Valid().
+    // fast path for strings with long ascii prefixes
     f := 0
     data = data[:len(data):len(data)]
     for len(data) >= 8 {
@@ -119,7 +121,7 @@ func (this *ByteMap) Detect(data []byte) (Encoding, int) {
               uint32(data[2]) << 16 | uint32(data[3]) << 24
         c2 := uint32(data[4]) | uint32(data[5]) << 8 |
               uint32(data[6]) << 16 | uint32(data[7]) << 24
-        // Test the highest bit in each byte code.
+        // test the highest bit in each byte code.
         if (c1 | c2) & 0x80808080 != 0 {
             // not ascii
             break
@@ -128,49 +130,90 @@ func (this *ByteMap) Detect(data []byte) (Encoding, int) {
         data = data[8:]
     }
 
-    p := 0
-    m := this
-    s := len(data)
-    o := s
-    r := ASCII
+    p := 0          // buffer index
+    m := this       // character map level pointer
+    n := 0          // double-encoded char counter
+    s := len(data)  // size
+    o := s          // offset of the first encountered double-encoded char
+    r := ASCII      // result
+
     for p < s {
         c := data[p]
         p++
+        // at first level we check if this is a basic ascii character
         if m.byteMap[c] {
-            // ascii
+           // 7-bit ascii code can't follow an incomplete sequence
+           if r == INCOMPLETE {
+                return UNKNOWN, f + p
+            }
+            // finding ascii character is our only opportunity to reset
+            // the counter, because otherwise we don't know where
+            // a double-encoded sequence ends since the original character
+            // could be a sequence of anywhere from 2 to 5 bytes
+            if n >= 2 {
+                n = 0
+            }
             continue
         }
-        if p == s {
-            return ERROR, f + p
-        }
+        // check if this character can start a multi-byte character
+        // if so, switch to second level of the character map
         m := m.next[c]
         if m == nil {
+            // the character was not found in the character map
             return UNKNOWN, f + p
+        }
+        if p == s {
+            // string ends in the middle of a multi-byte sequence
+            return ERROR, f + p
+        }
+        if n < 2 {
+            r = INCOMPLETE
         }
 
         c = data[p]
         p++
+        // at second level we check for two-byte characters
         if m.byteMap[c] {
-            // complete double-encoded sequence (2 bytes)
-            r = DOUBLE_ENCODED
+            // we found a complete multi-byte character
+            n++
+            // if it is the second character in a sequence then we found
+            // a double-encoded sequence
+            if n == 2 {
+                r = DOUBLE_ENCODED
+            }
+            // store the position, if one hasn't been stored already
             o = min(o, p - 1)
             continue
         }
-        if p == s {
-            return ERROR, f + p
-        }
+        // check if this character is the middle of a three-byte character
+        // if so, switch to third level of the character map
         m = m.next[c]
         if m == nil {
+            // the character was not found in the character map
             return UNKNOWN, f + p
+        }
+        if p == s {
+            // string ends in the middle of a multi-byte sequence
+            return ERROR, f + p
         }
 
         c = data[p]
         p++
+        // at third level we check for three-byte characters
         if m.byteMap[c] {
-            // complete double-encoded sequence (3 bytes)
-            r = DOUBLE_ENCODED
+            // we found a complete multi-byte character
+            n++
+            // if it is the second character in a sequence then we found
+            // a double-encoded sequence
+            if n == 2 {
+                r = DOUBLE_ENCODED
+            }
+            // store the position, if one hasn't been stored already
+            o = min(o, p - 1)
             continue
         }
+
+        // the character was not found in the character map
         return UNKNOWN, f + p
     }
 
@@ -211,7 +254,7 @@ func (this *UnDoubleEncoder) Transform(b []byte) ([]byte, error) {
 
     enc, _ := this.byteMap.Detect(o)
     // try to recover from an invalid trailing sequence
-    if enc == ERROR {
+    if enc == ERROR || enc == INCOMPLETE {
         for p := len(b) - 1; p >= 0 && p >= len(b) - 2; p-- {
             if o[p] == 0xC2 || o[p] == 0xC3 || o[p] == 0xC5 ||
                 o[p] == 0xC6 || o[p] == 0xCB || o[p] == 0xE2 {
@@ -226,7 +269,7 @@ func (this *UnDoubleEncoder) Transform(b []byte) ([]byte, error) {
 
                 // re-check the shorter string
                 enc, _ = this.byteMap.Detect(o[:p])
-                if enc != ERROR {
+                if enc != ERROR && enc != INCOMPLETE {
                     // discard the broken sequence
                     o = o[:p]
                 }
@@ -297,14 +340,13 @@ func (this *UnDoubleEncoder) Transform(b []byte) ([]byte, error) {
 func (this *UnDoubleEncoder) transform(src []byte) (dst []byte, err error) {
     pDst := 0
     src = src[:len(src):len(src)]
-    // Fast path for strings with long ascii prefixes.
-    // Based on utf8.Valid().
+    // fast path for strings with long ascii prefixes
     for len(src) >= 8 {
         c1 := uint32(src[0]) | uint32(src[1]) << 8 |
               uint32(src[2]) << 16 | uint32(src[3]) << 24
         c2 := uint32(src[4]) | uint32(src[5]) << 8 |
               uint32(src[6]) << 16 | uint32(src[7]) << 24
-        // Test the highest bit in each byte code.
+        // test the highest bit in each byte code.
         if (c1 | c2) & 0x80808080 != 0 {
             // not ascii
             break
@@ -319,7 +361,7 @@ func (this *UnDoubleEncoder) transform(src []byte) (dst []byte, err error) {
         src = src[8:]
     }
 
-    // Based on golang.org/x/text/encoding/charmap
+    // based on golang.org/x/text/encoding/charmap
     pSrc := 0
     r, size := rune(0), 0
     for pSrc < len(src) {
