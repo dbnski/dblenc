@@ -18,11 +18,10 @@ func main() {
         []byte("Ã©lan vital"),
     }
 
-    bm := dblenc.NewByteMap()
-    decoder := dblenc.NewUnDoubleEncoder()
+    decoder := dblenc.NewDecoder()
 
     for i, sample := range(samples) {
-        result, _ := bm.Detect(sample)
+        result, _ := decoder.Detect(sample)
         fixed, err := decoder.Transform(sample)
         if err != nil {
             panic(err)
