@@ -141,7 +141,7 @@ var testCases = []TestCase{
         TestStringHex:    decode("77c384e280a677c385"),
         TransformHex:     decode("77c48577c5"),
         TransformedHex:   decode("77c48577"),
-        DetectResult:     DOUBLE_ENCODED,
+        DetectResult:     INCOMPLETE_DOUBLE_ENCODED,
         DetectOffset:     2,
     },
     {
@@ -151,7 +151,7 @@ var testCases = []TestCase{
         TestString:       "waÅ",
         TestStringHex:    decode("7761c385"),
         TransformHex:     decode("7761c5"),
-        TransformedHex:   decode("7761c385"),
+        TransformedHex:   decode("7761"),
         DetectResult:     INCOMPLETE_DOUBLE_ENCODED,
         DetectOffset:     3,
     },
@@ -188,7 +188,7 @@ var testCases = []TestCase{
         TransformError:   ErrInvalid,
         TransformedHex:   decode("77c384e280a6c300c2bc"),
         DetectResult:     OTHER_CHARSET,
-        DetectOffset:     8,
+        DetectOffset:     7,
     },
     {
         Name:             "UTF8_Malformed_Infix_Inner",

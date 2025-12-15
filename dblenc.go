@@ -194,7 +194,7 @@ func (d *Decoder) Detect(data []byte) (Encoding, int) {
         // check if it can be the middle of a three-byte double-encoded sequence
         m = m.next[c]
         if m == nil {
-            return OTHER_CHARSET, f + p
+            return OTHER_CHARSET, f + (p - 1)
         }
         if p == s {
             // it ends mid-sequence
@@ -212,46 +212,26 @@ func (d *Decoder) Detect(data []byte) (Encoding, int) {
                 r = DOUBLE_ENCODED
                 n++
             }
-            o = min(o, p - 1)
+            o = min(o, p - 2)
             continue
         }
 
         // no match in the character map
-        return OTHER_CHARSET, f + p
-    }
-
-    if n > 0 && r == INCOMPLETE_DOUBLE_ENCODED {
-        r = DOUBLE_ENCODED
+        return OTHER_CHARSET, f + (p - 2)
     }
 
     return r, f + min(o, p)
 }
 
 func (d *Decoder) Transform(b []byte) ([]byte, error) {
-    // {
-    //     enc, at := this.byteMap.Detect(b)
-    //     fmt.Printf(
-    //         "INPUT:\nstr   = %s\nhex   = %x\ntest  = %v [at %d/%d]\n\n",
-    //         b, b[:], enc, at, len(b),
-    //     )
-    // }
     o := b
 
     enc, _ := d.Detect(o)
-    // try to recover from an invalid trailing sequence
+    // try to recover from an incomplete trailing sequence
     if enc == ERROR {
-        for p := len(b) - 1; p >= 0 && p >= len(b) - 2; p-- {
+        for p := len(b) - 1; p >= 0 && p >= len(b) - utf8.UTFMax; p-- {
             if o[p] == 0xC2 || o[p] == 0xC3 || o[p] == 0xC5 ||
                 o[p] == 0xC6 || o[p] == 0xCB || o[p] == 0xE2 {
-                // {
-                //     _enc, _ := this.byteMap.Detect(b[p:])
-                //     fmt.Printf(
-                //         "\tSUFFIX CHECK:\n\tstr   = %s\n\thex   = " +
-                //         "%x\n\tat    = %d/%d\n\ttest  = %v\n\n",
-                //         string(b[p:]), b[p:], p + 1, len(b), _enc,
-                //     )
-                // }
-
                 // re-check the shorter string
                 enc, _ = d.Detect(o[:p])
                 if enc != ERROR {
@@ -263,7 +243,7 @@ func (d *Decoder) Transform(b []byte) ([]byte, error) {
         }
     }
 
-    for enc == DOUBLE_ENCODED {
+    for enc == DOUBLE_ENCODED || enc == INCOMPLETE_DOUBLE_ENCODED {
         x, err := d.transform(o)
         if err != nil {
             return nil, err
@@ -273,20 +253,11 @@ func (d *Decoder) Transform(b []byte) ([]byte, error) {
         if x[len(x) - 1] >= 0x80 {
             p := len(x) - 1
             // search for the start of a utf8 sequence
-            for p >= 0 && p >= len(x) - 4 {
+            for p >= 0 && p >= len(x) - utf8.UTFMax {
                 if x[p] >= 0xC2 && x[p] <= 0xF4 {
-                    // {
-                    //     valid := utf8.Valid(x[p:])
-                    //     fmt.Printf(
-                    //         "\tSUFFIX CHECK:\n\tstr   = %s\n\thex   = " +
-                    //         "%x\n\tat    = %d/%d\n\tvalid = %v\n\n",
-                    //         string(x[p:]), x[p:], p + 1, len(x), valid,
-                    //     )
-                    // }
-
                     valid := utf8.Valid(x[p:])
                     if !valid {
-                        // the sequence is invalid, discard it
+                        // trailing sequence is invalid, discard it
                         x = x[:p]
                     }
                     break
@@ -299,15 +270,6 @@ func (d *Decoder) Transform(b []byte) ([]byte, error) {
             }
         }
 
-        // {
-        //     enc, at := this.byteMap.Detect(x)
-        //     valid := utf8.Valid(x)
-        //     fmt.Printf(
-        //         "\tPASS:\n\tstr   = %s\n\thex   = %x\n\ttest  = %v " +
-        //         "[at %d/%d]\n\tvalid = %v\n\n",
-        //         x, x[:], enc, at, len(x), valid,
-        //     )
-        // }
         enc, _ = d.Detect(x)
         valid := utf8.Valid(x)
         if !valid {
@@ -317,7 +279,6 @@ func (d *Decoder) Transform(b []byte) ([]byte, error) {
 
         o = x  // new candidate
     }
-    // fmt.Printf("OUTPUT:\nstr   = %s\nhex   = %x\n\n\n", o, o[:])
 
     return o, nil
 }
