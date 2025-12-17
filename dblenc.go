@@ -7,7 +7,8 @@ import (
 )
 
 var (
-    ErrInvalid = errors.New("invalid characters")
+    ErrInvalid = errors.New("invalid byte sequence")
+    ErrNoop    = errors.New("nothing changed")
 )
 
 var charMap = [256]uint32{
@@ -148,69 +149,58 @@ func (d *Decoder) Detect(data []byte) (Encoding, int) {
     p := 0          // buffer index
     m := d.byteMap  // character map level pointer
     l := 0          // double-encoded sequence length counter
-    n := 0          // total number of double-encoded sequences found
     s := len(data)  // size
     o := s          // offset of the first encountered double-encoded char
     r := ASCII      // result
 
     for p < s {
+        // first byte
         c := data[p]
         p++
-        // check if this is an ASCII character
-        if m.byteMap[c] {
-           if r == INCOMPLETE_DOUBLE_ENCODED {
-                return OTHER_CHARSET, f + p
+        if m.byteMap[c] {                       // ascii?
+           if r == INCOMPLETE_DOUBLE_ENCODED {  // not double-encoded if followed
+                return OTHER_CHARSET, o         // by an ascii
             }
             l = 0
             continue
         }
-        // check the map if the character starts a known double-encoded sequence
         m := m.next[c]
-        if m == nil {
-            return OTHER_CHARSET, f + p
+        if m == nil {                           // if it's not in the map
+            return OTHER_CHARSET, f + p         // it's not double-encoded
         }
         if p == s {
-            // it ends mid-sequence
-            return ERROR, f + p
+            return ERROR, f + p                 // string ends in the middle of a sequence
         }
         if l < 2 {
             r = INCOMPLETE_DOUBLE_ENCODED
         }
 
+        // second byte
         c = data[p]
         p++
         if m.byteMap[c] {
-            // matched a complete multi-byte character
             l++
-            // we found a double-encoded sequence if it's the second such
-            // character in a row
-            if l == 2 {
-                r = DOUBLE_ENCODED
-                n++
+            if l == 2 {                         // two matching characters in a row
+                r = DOUBLE_ENCODED              // make double-encoded sequence
             }
-            o = min(o, p - 1)
+            o = min(o, p - 1)                   // remember first ocurrence
             continue
         }
-        // check if it can be the middle of a three-byte double-encoded sequence
         m = m.next[c]
         if m == nil {
             return OTHER_CHARSET, f + (p - 1)
         }
         if p == s {
-            // it ends mid-sequence
             return ERROR, f + p
         }
 
+        // third byte
         c = data[p]
         p++
         if m.byteMap[c] {
-            // matched a complete multi-byte character
             l++
-            // we found a double-encoded sequence if it's the second such
-            // character in a row
             if l == 2 {
                 r = DOUBLE_ENCODED
-                n++
             }
             o = min(o, p - 2)
             continue
@@ -243,10 +233,12 @@ func (d *Decoder) Transform(b []byte) ([]byte, error) {
         }
     }
 
+    transformErr := ErrNoop
+
     for enc == DOUBLE_ENCODED || enc == INCOMPLETE_DOUBLE_ENCODED {
         x, err := d.transform(o)
         if err != nil {
-            return nil, err
+            break
         }
 
         // validate the suffix if it's not an ascii char
@@ -264,23 +256,25 @@ func (d *Decoder) Transform(b []byte) ([]byte, error) {
                 }
                 p--
             }
-            if p < len(x) - 4 {
+            if p < len(x) - utf8.UTFMax {
                 // no ascii or utf8 sequence found
-                return nil, ErrInvalid
+                break
             }
         }
 
-        enc, _ = d.Detect(x)
         valid := utf8.Valid(x)
         if !valid {
             // this iteration got us nowhere good
             break
         }
 
+        transformErr = nil
+        enc, _ = d.Detect(x)
+
         o = x  // new candidate
     }
 
-    return o, nil
+    return o, transformErr
 }
 
 func (this *Decoder) transform(src []byte) (dst []byte, err error) {
