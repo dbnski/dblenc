@@ -50,8 +50,9 @@ type Encoding byte
 const (
     ASCII                     Encoding = iota
     OTHER_CHARSET
-    INCOMPLETE_DOUBLE_ENCODED
+    UNKNOWN
     DOUBLE_ENCODED
+    DOUBLE_ENCODED_TRUNCATED
     ERROR
 )
 
@@ -63,6 +64,8 @@ func (r Encoding) String() string {
         return "other-charset"
     case DOUBLE_ENCODED:
         return "double-encoded"
+    case DOUBLE_ENCODED_TRUNCATED:
+        return "double-encoded-truncated"
     case ERROR:
         return "error"
     default:
@@ -71,7 +74,7 @@ func (r Encoding) String() string {
 }
 
 type byteMap struct {
-    byteMap [256]bool
+    byteMap [256]byte
     next    [256]*byteMap
 }
 
@@ -79,16 +82,16 @@ func newByteMap() *byteMap {
     m := &byteMap{}
     buf := make([]byte, utf8.UTFMax)
 
-    for _, u := range charMap {
+    for i, u := range charMap {
         ptr := m
 
         r := rune(u)
         n := utf8.EncodeRune(buf, r)
 
-        for i := 0; i < utf8.UTFMax; i++ {
-            code := buf[i]
-            if n == i + 1 {
-                ptr.byteMap[code] = true
+        for j := 0; j < utf8.UTFMax; j++ {
+            code := buf[j]
+            if n == j + 1 {
+                ptr.byteMap[code] = byte(i)
                 break
             }
             if ptr.next[code] == nil {
@@ -130,7 +133,7 @@ func NewDecoder() *Decoder {
 // in favour of the function's performance.
 func (d *Decoder) Detect(data []byte) (Encoding, int) {
     // fast path for strings with long ascii prefixes
-    f := 0
+    f := 0 // fast-forward index
     data = data[:len(data):len(data)]
     for len(data) >= 8 {
         c1 := uint32(data[0]) | uint32(data[1]) << 8 |
@@ -146,74 +149,131 @@ func (d *Decoder) Detect(data []byte) (Encoding, int) {
         data = data[8:]
     }
 
-    p := 0          // buffer index
-    m := d.byteMap  // character map level pointer
-    l := 0          // double-encoded sequence length counter
-    s := len(data)  // size
-    o := s          // offset of the first encountered double-encoded char
-    r := ASCII      // result
+    r := ASCII      // analysis result
+    m := d.byteMap  // character map pointer
+    i := 0          // buffer position index
+    s := len(data)  // buffer length
+    o := s          // first double-encoded sequence offset
+    t := 0          // total double-encoded sequences found
+    n := 0          // decoded code points counter
+    l := 1          // decoded code point length
+    x := byte(0)    // most recent code unit
 
-    for p < s {
-        // first byte
-        c := data[p]
-        p++
-        if m.byteMap[c] {                       // ascii?
-           if r == INCOMPLETE_DOUBLE_ENCODED {  // not double-encoded if followed
-                return OTHER_CHARSET, o         // by an ascii
+    for i < s {
+        // FIRST BYTE
+        c := data[i]
+        i++
+
+        if c < 0x80 {                           // ascii?
+            if r == UNKNOWN {                   // incomplete sequence
+                return OTHER_CHARSET, f + i     // followed by an ascii
             }
-            l = 0
+            n = 0                               // reset code point counter
             continue
         }
+
         m := m.next[c]
-        if m == nil {                           // if it's not in the map
-            return OTHER_CHARSET, f + p         // it's not double-encoded
+        if m == nil {                           // sequence does not appear
+            return OTHER_CHARSET, f + i         // in the map
         }
-        if p == s {
-            return ERROR, f + p                 // string ends in the middle of a sequence
-        }
-        if l < 2 {
-            r = INCOMPLETE_DOUBLE_ENCODED
+        if i == s {
+            return ERROR, f + i                 // buffer ends mid-sequence
         }
 
-        // second byte
-        c = data[p]
-        p++
-        if m.byteMap[c] {
-            l++
-            if l == 2 {                         // two matching characters in a row
-                r = DOUBLE_ENCODED              // make double-encoded sequence
+        // SECOND BYTE
+        c = data[i]
+        i++
+
+        if m.byteMap[c] != 0 {                  // matches complete double-encoded character
+            x = m.byteMap[c]
+            n++
+
+            if n == 1 {                         // analyse the first byte
+                switch {
+                case x & 0xE0 == 0xC0:          // 2-byte code point
+                    l = 2
+                case x & 0xF0 == 0xE0:          // 3-byte code point
+                    l = 3
+                case x & 0xF8 == 0xF0:          // 4-byte code point
+                    l = 4
+                default:                        // not utf8
+                    return OTHER_CHARSET, f + i
+                }
+                r = UNKNOWN
+            } else {                            // analyse continuation bytes
+                if (x & 0xC0) != 0x80 {         // check if valid continuation byte
+                    return OTHER_CHARSET, f + i
+                }
+                if n == l {                     // decoded complete code unit sequence
+                    t++
+                    n = 0
+                    r = DOUBLE_ENCODED
+                }
             }
-            o = min(o, p - 1)                   // remember first ocurrence
+
+            o = min(o, i - 1)
             continue
         }
+
         m = m.next[c]
         if m == nil {
-            return OTHER_CHARSET, f + (p - 1)
+            return OTHER_CHARSET, f + (i - 1)
         }
-        if p == s {
-            return ERROR, f + p
+        if i == s {
+            return ERROR, f + i
         }
 
-        // third byte
-        c = data[p]
-        p++
-        if m.byteMap[c] {
-            l++
-            if l == 2 {
-                r = DOUBLE_ENCODED
+        // THIRD BYTE
+        c = data[i]
+        i++
+
+        if m.byteMap[c] != 0 {                  // matches complete double-encoded character
+            x = m.byteMap[c]
+            n++
+
+            if n == 1 {                         // analyse the first byte
+                switch {
+                case x & 0xE0 == 0xC0:          // 2-byte code point
+                    l = 2
+                case x & 0xF0 == 0xE0:          // 3-byte code point
+                    l = 3
+                case x & 0xF8 == 0xF0:          // 4-byte code point
+                    l = 4
+                default:                        // not utf8
+                    return OTHER_CHARSET, f + i
+                }
+                r = UNKNOWN
+            } else {                            // analyse continuation bytes
+                if (x & 0xC0) != 0x80 {         // check if valid continuation byte
+                    return OTHER_CHARSET, f + i
+                }
+                if n == l {                     // decoded complete code unit sequence
+                    t++
+                    n = 0
+                    r = DOUBLE_ENCODED
+                }
             }
-            o = min(o, p - 2)
+
+            o = min(o, i - 1)
             continue
         }
 
-        // no match in the character map
-        return OTHER_CHARSET, f + (p - 2)
+        // FOURTH BYTE
+        return OTHER_CHARSET, f + (i - 2)       // no 4-byte code points exist
     }
 
-    return r, f + min(o, p)
+    if r == UNKNOWN && t > 0 {
+        r = DOUBLE_ENCODED_TRUNCATED
+    }
+
+    return r, f + min(o, i)
 }
 
 func (d *Decoder) Transform(b []byte) ([]byte, error) {
+    return d.TransformFunc(b, nil)
+}
+
+func (d *Decoder) TransformFunc(b []byte, callback func([]byte, Encoding) bool) ([]byte, error) {
     o := b
 
     enc, _ := d.Detect(o)
@@ -227,6 +287,9 @@ func (d *Decoder) Transform(b []byte) ([]byte, error) {
                 if enc != ERROR {
                     // discard the broken sequence
                     o = o[:p]
+                    if callback != nil && !callback(o, enc) {
+                        return o, nil
+                    }
                 }
                 break
             }
@@ -235,10 +298,14 @@ func (d *Decoder) Transform(b []byte) ([]byte, error) {
 
     transformErr := ErrNoop
 
-    for enc == DOUBLE_ENCODED || enc == INCOMPLETE_DOUBLE_ENCODED {
+    for enc == DOUBLE_ENCODED || enc == DOUBLE_ENCODED_TRUNCATED || enc == UNKNOWN {
         x, err := d.transform(o)
         if err != nil {
             break
+        }
+
+        if callback != nil && !callback(x, enc) {
+            return x, nil
         }
 
         // validate the suffix if it's not an ascii char
@@ -251,6 +318,9 @@ func (d *Decoder) Transform(b []byte) ([]byte, error) {
                     if !valid {
                         // trailing sequence is invalid, discard it
                         x = x[:p]
+                        if callback != nil && !callback(x, enc) {
+                            return x, nil
+                        }
                     }
                     break
                 }
@@ -265,7 +335,7 @@ func (d *Decoder) Transform(b []byte) ([]byte, error) {
         valid := utf8.Valid(x)
         if !valid {
             // this iteration got us nowhere good
-            break
+            // break
         }
 
         transformErr = nil
@@ -304,6 +374,7 @@ func (this *Decoder) transform(src []byte) (dst []byte, err error) {
     // based on golang.org/x/text/encoding/charmap
     pSrc := 0
     r, size := rune(0), 0
+
     for pSrc < len(src) {
         r = rune(src[pSrc])
 

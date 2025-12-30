@@ -55,7 +55,7 @@ var testCases = []TestCase{
         TestStringHex:    decode("546f6dc3a1c5a1"),
         TransformHex:     decode("546f6de19a"),
         TransformedHex:   decode("546f6d"),
-        DetectResult:     DOUBLE_ENCODED,
+        DetectResult:     UNKNOWN,
         DetectOffset:     4,
     },
     {
@@ -132,7 +132,7 @@ var testCases = []TestCase{
         TestStringHex:    decode("77c384e280a6c385"),
         TransformHex:     decode("77c485c5"),
         TransformedHex:   decode("77c485"),
-        DetectResult:     DOUBLE_ENCODED,
+        DetectResult:     DOUBLE_ENCODED_TRUNCATED,
         DetectOffset:     2,
     },
     {
@@ -143,7 +143,7 @@ var testCases = []TestCase{
         TestStringHex:    decode("77c384e280a677c385"),
         TransformHex:     decode("77c48577c5"),
         TransformedHex:   decode("77c48577"),
-        DetectResult:     INCOMPLETE_DOUBLE_ENCODED,
+        DetectResult:     DOUBLE_ENCODED_TRUNCATED,
         DetectOffset:     2,
     },
     {
@@ -154,7 +154,7 @@ var testCases = []TestCase{
         TestStringHex:    decode("7761c385"),
         TransformHex:     decode("7761c5"),
         TransformedHex:   decode("7761"),
-        DetectResult:     INCOMPLETE_DOUBLE_ENCODED,
+        DetectResult:     UNKNOWN,
         DetectOffset:     3,
     },
     {
@@ -177,7 +177,7 @@ var testCases = []TestCase{
         TestStringHex:    decode("77c384e280a6c385"),
         TransformHex:     decode("77c485c5"),
         TransformedHex:   decode("77c485"),
-        DetectResult:     DOUBLE_ENCODED,
+        DetectResult:     DOUBLE_ENCODED_TRUNCATED,
         DetectOffset:     2,
     },
     {
@@ -203,7 +203,7 @@ var testCases = []TestCase{
         TransformedHex:   decode("77c38400c385c2bc"),
         TransformedError: ErrNoop,
         DetectResult:     OTHER_CHARSET,
-        DetectOffset:     2,
+        DetectOffset:     4,
     },
     {
         Name:             "UTF8_Triple_Encoded",
@@ -236,7 +236,7 @@ var testCases = []TestCase{
         TestStringHex:    decode("77c383e2809ec3a2e282acc2a6c383e280a6c382"),
         TransformHex:     decode("77c384e280a6c385c2"),
         TransformedHex:   decode("77c485"),
-        DetectResult:     DOUBLE_ENCODED,
+        DetectResult:     DOUBLE_ENCODED_TRUNCATED,
         DetectOffset:     2,
     },
     {
