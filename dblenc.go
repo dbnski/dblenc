@@ -6,6 +6,8 @@ import (
     "unicode/utf8"
 )
 
+var DEBUG = false
+
 var (
     ErrInvalid = errors.New("invalid byte sequence")
     ErrNoop    = errors.New("nothing changed")
@@ -48,11 +50,13 @@ var charMap = [256]uint32{
 
 type Encoding byte
 const (
-    ASCII                     Encoding = iota
+    UNKNOWN                  Encoding = iota
+    ASCII
+    MAYBE_OTHER
     OTHER_CHARSET
-    UNKNOWN
-    DOUBLE_ENCODED
+    MAYBE_DOUBLE_ENCODED
     DOUBLE_ENCODED_TRUNCATED
+    DOUBLE_ENCODED
     ERROR
 )
 
@@ -64,8 +68,12 @@ func (r Encoding) String() string {
         return "other-charset"
     case DOUBLE_ENCODED:
         return "double-encoded"
+    case MAYBE_DOUBLE_ENCODED:
+        return "maybe-double-encoded"
     case DOUBLE_ENCODED_TRUNCATED:
         return "double-encoded-truncated"
+    case MAYBE_OTHER:
+        return "maybe-other"
     case ERROR:
         return "error"
     default:
@@ -104,9 +112,14 @@ func newByteMap() *byteMap {
     return m
 }
 
+type Callback func(...interface{})
+
 type Decoder struct {
     byteMap *byteMap
     runeMap []uint32
+
+    onRune      Callback
+    onTransform Callback
 }
 
 func NewDecoder() *Decoder {
@@ -126,12 +139,22 @@ func NewDecoder() *Decoder {
     return d
 }
 
+func (d *Decoder) OnRune(callback Callback) *Decoder {
+    d.onRune = callback
+    return d
+}
+
+func (d *Decoder) OnTransform(callback Callback) *Decoder {
+    d.onTransform = callback
+    return d
+}
+
 // The function quickly tests a byte slice for presence of double-encoded
 // characters. It will correctly classify strings that are not double-encoded,
 // but may occasionally flag legitimate UTF-8 strings as double-encoded - such
 // cases require separate verification which is intentionally omitted here
 // in favour of the function's performance.
-func (d *Decoder) Detect(data []byte) (Encoding, int) {
+func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
     // fast path for strings with long ascii prefixes
     f := 0 // fast-forward index
     data = data[:len(data):len(data)]
@@ -151,144 +174,301 @@ func (d *Decoder) Detect(data []byte) (Encoding, int) {
 
     r := ASCII      // analysis result
     m := d.byteMap  // character map pointer
-    i := 0          // buffer position index
-    s := len(data)  // buffer length
-    o := s          // first double-encoded sequence offset
-    t := 0          // total double-encoded sequences found
-    n := 0          // decoded code points counter
-    l := 1          // decoded code point length
-    x := byte(0)    // most recent code unit
 
-    for i < s {
+    a := 0          // ascii count
+    c := 0          // code point counter
+    e := 0          // double-encoded code point counter
+    i := 0          // buffer position index
+    n := 0          // decoded code units counter
+
+    o := len(data)  // position of the first double-encoded sequence
+    x := byte(0)    // decoded code unit
+    u := uint32(0)  // decoded code unit sequence
+    s := 1          // decoded code unit sequence size
+
+    var runeSequence [5]rune
+    var sequenceLength int
+    var isMultiple bool
+    var isLatin bool = true
+    var isLanguage Language = ^Language(0)
+    var isDecodedLanguage Language = ^Language(0)
+
+    for i < len(data) {
+        // ASCII
         // FIRST BYTE
-        c := data[i]
+        currentByte := data[i]
         i++
 
-        if c < 0x80 {                           // ascii?
+        if currentByte < 0x80 {                 // ascii?
             if r == UNKNOWN {                   // incomplete sequence
-                return OTHER_CHARSET, f + i     // followed by an ascii
+                return OTHER_CHARSET, c, e, f + i  // followed by an ascii
             }
-            n = 0                               // reset code point counter
+            a++
+            c++
+
             continue
         }
+        if currentByte < 0xC0 {                 // 0x80 - 0xBF cannot appear stand-alone
+            return OTHER_CHARSET, c, e, f + i
+        }
 
-        m := m.next[c]
-        if m == nil {                           // sequence does not appear
-            return OTHER_CHARSET, f + i         // in the map
+        m := m.next[currentByte]
+        if m == nil {                           // byte sequence does not appear
+            return OTHER_CHARSET, c, e, f + i      // in the map
         }
-        if i == s {
-            return ERROR, f + i                 // buffer ends mid-sequence
+        if i == len(data) {
+            return ERROR, c, e, f + i              // buffer ends mid-sequence
         }
+        firstByte := currentByte
 
         // SECOND BYTE
-        c = data[i]
+        currentByte = data[i]
         i++
 
-        if m.byteMap[c] != 0 {                  // matches complete double-encoded character
-            x = m.byteMap[c]
+        if m.byteMap[currentByte] != 0 {        // matches complete double-encoded character
+            x = m.byteMap[currentByte]
+            c++
             n++
 
-            if n == 1 {                         // analyse the first byte
+            currentRune := rune(firstByte & 0x1F) << 6 | rune(currentByte & 0x3F)
+            if isLatin {
+                latin := false
+                if int(currentRune) < len(Diacritics) {
+                    latin = Diacritics[currentRune] > 0
+                    isLanguage = isLanguage & Diacritics[currentRune]
+                }
+                isLatin = latin
+            }
+
+            if e > 0 {
+                isMultiple = runeSequence[sequenceLength] != currentRune
+            }
+            runeSequence[sequenceLength] = currentRune
+            sequenceLength++
+
+            if n == 1 {                         // first byte of decoded code point
                 switch {
                 case x & 0xE0 == 0xC0:          // 2-byte code point
-                    l = 2
+                    if x < 0xC2 {
+                        return OTHER_CHARSET, c, e, f + i
+                    }
+                    s = 2
                 case x & 0xF0 == 0xE0:          // 3-byte code point
-                    l = 3
+                    s = 3
                 case x & 0xF8 == 0xF0:          // 4-byte code point
-                    l = 4
+                    if x >= 0xF5 {
+                        return OTHER_CHARSET, c, e, f + i
+                    }
+                    s = 4
                 default:                        // not utf8
-                    return OTHER_CHARSET, f + i
+                    return OTHER_CHARSET, c, e, f + i
                 }
+                u = uint32(x)
                 r = UNKNOWN
-            } else {                            // analyse continuation bytes
+            } else {                            // continuation bytes of decoded code point
                 if (x & 0xC0) != 0x80 {         // check if valid continuation byte
-                    return OTHER_CHARSET, f + i
+                    return OTHER_CHARSET, c, e, f + i
                 }
-                if n == l {                     // decoded complete code unit sequence
-                    t++
-                    n = 0
+                u = (u << 8) | uint32(x)
+
+                if n == s {                     // decoded complete code unit sequence
+                    if s == 2 {
+                        decodedRune := rune((((u >> 8) & 0x1F) << 6) | ((u & 0xFF) & 0x3F))
+                        if int(decodedRune) < len(Diacritics) {
+                            isDecodedLanguage = isDecodedLanguage & Diacritics[decodedRune]
+                        }
+                    }
+                    if s == 3 {
+                        // UTF16 code points
+                        if u >= 0xEDA080 && u <= 0xEDBFBF {
+                            return OTHER_CHARSET, c, e, f + i
+                        }
+                    }
+                    if s == 4 {
+                        // UTF16 code points
+                        if u >= 0xF4908080 {
+                            return OTHER_CHARSET, c, e, f + i
+                        }
+                    }
+                    // out-of-scope code points
+                    if u > 0xF3A087BF {
+                        return OTHER_CHARSET, c, e, f + i
+                    }
+
+                    if d.onRune != nil {
+                        d.onRune(sequenceLength, runeSequence)
+                    }
+
                     r = DOUBLE_ENCODED
+                    e++                         // found double-encoded code point
+                    n = 0                       // reset decoded code units counter
+                    u = 0                       // reset decoded char
+
+                    sequenceLength = 0
                 }
             }
 
             o = min(o, i - 1)
+
             continue
         }
 
-        m = m.next[c]
+        m = m.next[currentByte]
         if m == nil {
-            return OTHER_CHARSET, f + (i - 1)
+            return OTHER_CHARSET, c, e, f + (i - 1)
         }
-        if i == s {
-            return ERROR, f + i
+        if i == len(data) {
+            return ERROR, c, e, f + i
         }
+        secondByte := currentByte
 
         // THIRD BYTE
-        c = data[i]
+        currentByte = data[i]
         i++
 
-        if m.byteMap[c] != 0 {                  // matches complete double-encoded character
-            x = m.byteMap[c]
+        if m.byteMap[currentByte] != 0 {        // matches complete double-encoded character
+            x = m.byteMap[currentByte]
+            c++
             n++
+
+            currentRune := rune(firstByte & 0x0F) << 6 | rune(secondByte & 0x3F) | rune(currentByte & 0x3F)
+            if isLatin {
+                latin := false
+                if int(currentRune) < len(Diacritics) {
+                    latin = Diacritics[currentRune] > 0
+                    isLanguage = isLanguage & Diacritics[currentRune]
+                }
+                isLatin = latin
+            }
+
+            if e > 0 {
+                isMultiple = runeSequence[sequenceLength] != currentRune
+            }
+            runeSequence[sequenceLength] = currentRune
+            sequenceLength++
 
             if n == 1 {                         // analyse the first byte
                 switch {
                 case x & 0xE0 == 0xC0:          // 2-byte code point
-                    l = 2
+                    if x < 0xC2 {
+                        return OTHER_CHARSET, c, e, f + i
+                    }
+                    s = 2
                 case x & 0xF0 == 0xE0:          // 3-byte code point
-                    l = 3
+                    s = 3
                 case x & 0xF8 == 0xF0:          // 4-byte code point
-                    l = 4
+                    if x >= 0xF5 {
+                        return OTHER_CHARSET, c, e, f + i
+                    }
+                    s = 4
                 default:                        // not utf8
-                    return OTHER_CHARSET, f + i
+                    return OTHER_CHARSET, c, e, f + i
                 }
+                u = uint32(x)
                 r = UNKNOWN
             } else {                            // analyse continuation bytes
                 if (x & 0xC0) != 0x80 {         // check if valid continuation byte
-                    return OTHER_CHARSET, f + i
+                    return OTHER_CHARSET, c, e, f + i
                 }
-                if n == l {                     // decoded complete code unit sequence
-                    t++
-                    n = 0
+                u = (u << 8) | uint32(x)
+
+                if n == s {                     // decoded complete code unit sequence
+                    if s == 2 {
+                        decodedRune := rune((((u >> 8) & 0x1F) << 6) | ((u & 0xFF) & 0x3F))
+                        if int(decodedRune) < len(Diacritics) {
+                            isDecodedLanguage = isDecodedLanguage & Diacritics[decodedRune]
+                        }
+                    }
+                    if s == 3 {
+                        // UTF16 code points
+                        if u >= 0xEDA080 && u <= 0xEDBFBF {
+                            return OTHER_CHARSET, c, e, f + i
+                        }
+                    }
+                    if s == 4 {
+                        // UTF16 code points
+                        if u >= 0xF4908080 {
+                            return OTHER_CHARSET, c, e, f + i
+                        }
+                    }
+                    if s > 0xF3A087BF {
+                        return ERROR, c, e, f + i
+                    }
+
+                    if d.onRune != nil {
+                        d.onRune(sequenceLength, runeSequence)
+                    }
+
                     r = DOUBLE_ENCODED
+                    e++                         // found double-encoded code point
+                    n = 0                       // reset decoded code units counter
+                    u = 0                       // reset decoded char
+
+                    sequenceLength = 0
                 }
             }
 
             o = min(o, i - 1)
+
             continue
         }
 
         // FOURTH BYTE
-        return OTHER_CHARSET, f + (i - 2)       // no 4-byte code points exist
+        return OTHER_CHARSET, c, e, f + (i - 2) // no 4-byte code points exist
     }
 
-    if r == UNKNOWN && t > 0 {
-        r = DOUBLE_ENCODED_TRUNCATED
+    if r != ASCII && d.onRune != nil && sequenceLength > 0 {
+        d.onRune(sequenceLength, runeSequence)
     }
 
-    return r, f + min(o, i)
+    switch {
+    case r == ASCII:
+        // do not touch me
+    case r == OTHER_CHARSET:
+        panic("we should not be here")
+    case r == ERROR:
+        panic("we should not be here")
+    case r == UNKNOWN:                          // ends halfway thru possible dobule-encoded sequence
+        switch {
+        case isLatin:                           // all suspects are made exclusively of cp1252 letters
+            r = MAYBE_OTHER
+        case e > 0:                             // includes multiple suspects
+            r = DOUBLE_ENCODED_TRUNCATED
+        }
+    case r == DOUBLE_ENCODED:
+        if !isMultiple {                        // includes only one distinct suspect
+            r = MAYBE_DOUBLE_ENCODED
+            if isLatin {                        // all suspects are made exclusively of cp1252 letters
+                if isLanguage > 0 {             // all those letters are used by the same language
+                    r = MAYBE_OTHER
+                }
+                if isDecodedLanguage > 0 &&     // all decoded letters are used by a latin language
+                   isDecodedLanguage < ^Language(0) {
+                    r = MAYBE_DOUBLE_ENCODED    // covers known exceptions
+                }
+            }
+        }
+    }
+
+    return r, c, e, f + min(o, i)
 }
 
 func (d *Decoder) Transform(b []byte) ([]byte, error) {
-    return d.TransformFunc(b, nil)
-}
-
-func (d *Decoder) TransformFunc(b []byte, callback func([]byte, Encoding) bool) ([]byte, error) {
     o := b
 
-    enc, _ := d.Detect(o)
+    enc, _, _, _ := d.Detect(o)
     // try to recover from an incomplete trailing sequence
     if enc == ERROR {
         for p := len(b) - 1; p >= 0 && p >= len(b) - utf8.UTFMax; p-- {
             if o[p] == 0xC2 || o[p] == 0xC3 || o[p] == 0xC5 ||
                 o[p] == 0xC6 || o[p] == 0xCB || o[p] == 0xE2 {
                 // re-check the shorter string
-                enc, _ = d.Detect(o[:p])
+                enc, _, _, _ = d.Detect(o[:p])
                 if enc != ERROR {
                     // discard the broken sequence
                     o = o[:p]
-                    if callback != nil && !callback(o, enc) {
-                        return o, nil
+                    if d.onTransform != nil {
+                        d.onTransform(enc, o)
                     }
                 }
                 break
@@ -298,14 +478,13 @@ func (d *Decoder) TransformFunc(b []byte, callback func([]byte, Encoding) bool) 
 
     transformErr := ErrNoop
 
-    for enc == DOUBLE_ENCODED || enc == DOUBLE_ENCODED_TRUNCATED || enc == UNKNOWN {
+    for enc == DOUBLE_ENCODED || enc == DOUBLE_ENCODED_TRUNCATED || enc == MAYBE_DOUBLE_ENCODED || enc == UNKNOWN {
         x, err := d.transform(o)
         if err != nil {
             break
         }
-
-        if callback != nil && !callback(x, enc) {
-            return x, nil
+        if d.onTransform != nil {
+            d.onTransform(enc, x)
         }
 
         // validate the suffix if it's not an ascii char
@@ -318,8 +497,8 @@ func (d *Decoder) TransformFunc(b []byte, callback func([]byte, Encoding) bool) 
                     if !valid {
                         // trailing sequence is invalid, discard it
                         x = x[:p]
-                        if callback != nil && !callback(x, enc) {
-                            return x, nil
+                        if d.onTransform != nil {
+                            d.onTransform(enc, x)
                         }
                     }
                     break
@@ -339,12 +518,16 @@ func (d *Decoder) TransformFunc(b []byte, callback func([]byte, Encoding) bool) 
         }
 
         transformErr = nil
-        enc, _ = d.Detect(x)
+        enc, _, _, _ = d.Detect(x)
 
         o = x  // new candidate
     }
 
     return o, transformErr
+}
+
+func (this *Decoder) XTransform(src []byte) (dst []byte, err error) {
+    return this.transform(src)
 }
 
 func (this *Decoder) transform(src []byte) (dst []byte, err error) {

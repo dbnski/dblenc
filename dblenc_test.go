@@ -54,8 +54,9 @@ var testCases = []TestCase{
         TestString:       "Tomáš",
         TestStringHex:    decode("546f6dc3a1c5a1"),
         TransformHex:     decode("546f6de19a"),
-        TransformedHex:   decode("546f6d"),
-        DetectResult:     UNKNOWN,
+        TransformedHex:   decode("546f6dc3a1c5a1"),
+        TransformedError: ErrNoop,
+        DetectResult:     MAYBE_OTHER,
         DetectOffset:     4,
     },
     {
@@ -88,7 +89,7 @@ var testCases = []TestCase{
         TestStringHex:    decode("c3b0c5b8e284a2e2809a"),
         TransformHex:     decode("f09f9982"),
         TransformedHex:   decode("f09f9982"),
-        DetectResult:     DOUBLE_ENCODED,
+        DetectResult:     MAYBE_DOUBLE_ENCODED,
         DetectOffset:     1,
     },
     {
@@ -147,14 +148,15 @@ var testCases = []TestCase{
         DetectOffset:     2,
     },
     {
-        Name:             "UTF8_Double_Encoded_Truncated_3",
+        Name:             "UTF8_False_Negative",
         Original:         "waż",
         OriginalHex:      decode("7761c5bc"),
         TestString:       "waÅ",
         TestStringHex:    decode("7761c385"),
         TransformHex:     decode("7761c5"),
-        TransformedHex:   decode("7761"),
-        DetectResult:     UNKNOWN,
+        TransformedHex:   decode("7761c385"),
+        TransformedError: ErrNoop,
+        DetectResult:     MAYBE_OTHER,
         DetectOffset:     3,
     },
     {
@@ -250,6 +252,89 @@ var testCases = []TestCase{
         DetectResult:     DOUBLE_ENCODED,
         DetectOffset:     2,
     },
+    {
+        Name:             "Exception_1",
+        TestStringHex:    []byte("MATÄšJ"),
+        TransformHex:     []byte("MATĚJ"),
+        TransformedHex:   []byte("MATĚJ"),
+        DetectResult:     MAYBE_DOUBLE_ENCODED,
+        DetectOffset:     4,
+    },
+    {
+        Name:             "Exception_2",
+        TestStringHex:    []byte("KONECNÄš DOBRA"),
+        TransformHex:     []byte("KONECNĚ DOBRA"),
+        TransformedHex:   []byte("KONECNĚ DOBRA"),
+        DetectResult:     MAYBE_DOUBLE_ENCODED,
+        DetectOffset:     7,
+    },
+    {
+        Name:             "Exception_3",
+        TestStringHex:    []byte("ÄŠhess"),
+        TransformHex:     []byte("Ċhess"),
+        TransformedHex:   []byte("Ċhess"),
+        DetectResult:     MAYBE_DOUBLE_ENCODED,
+        DetectOffset:     1,
+    },
+    {
+        Name:             "Exception_4",
+        TestStringHex:    []byte("ÄŽakujem"),
+        TransformHex:     []byte("Ďakujem"),
+        TransformedHex:   []byte("Ďakujem"),
+        DetectResult:     MAYBE_DOUBLE_ENCODED,
+        DetectOffset:     1,
+    },
+    {
+        Name:             "Exception_5",
+        TestStringHex:    []byte("DoÄŸan"),
+        TransformHex:     []byte("Doğan"),
+        TransformedHex:   []byte("Doğan"),
+        DetectResult:     MAYBE_DOUBLE_ENCODED,
+        DetectOffset:     3,
+    },
+    {
+        Name:             "Exception_6",
+        TestStringHex:    []byte("Knock-ÎŸut"),
+        TransformHex:     []byte("Knock-Οut"),
+        TransformedHex:   []byte("Knock-Οut"),
+        DetectResult:     MAYBE_DOUBLE_ENCODED,
+        DetectOffset:     7,
+    },
+    {
+        Name:             "Exception_7",
+        TestStringHex:    []byte("Åšwinia"),
+        TransformHex:     []byte("Świnia"),
+        TransformedHex:   []byte("Świnia"),
+        DetectResult:     MAYBE_DOUBLE_ENCODED,
+        DetectOffset:     1,
+    },
+    {
+        Name:             "Edge_Case_1",
+        TestStringHex:    []byte("Úžasná"),
+        TransformHex:     decode("da9e61736ee1"),
+        TransformedHex:   []byte("Úžasná"),
+        TransformedError: ErrNoop,
+        DetectResult:     MAYBE_OTHER,
+        DetectOffset:     1,
+    },
+    {
+        Name:             "Edge_Case_2",
+        TestStringHex:    []byte("Úžasn"),
+        TransformHex:     decode("da9e61736e"),
+        TransformedHex:   []byte("Úžasn"),
+        TransformedError: ErrNoop,
+        DetectResult:     MAYBE_OTHER,
+        DetectOffset:     1,
+    },
+    {
+        Name:             "Edge_Case_3",
+        TestStringHex:    []byte("MÍšhrå"),
+        TransformHex:     decode("4dcd9a6872e5"),
+        TransformedHex:   []byte("MÍšhrå"),
+        TransformedError: ErrNoop,
+        DetectResult:     MAYBE_OTHER,
+        DetectOffset:     2,
+    },
 }
 
 var (
@@ -272,7 +357,7 @@ func TestDetect(t *testing.T) {
 
     for _, tc := range testCases {
         t.Run(tc.Name, func(t *testing.T) {
-            result, offset := d.Detect(tc.TestStringHex)
+            result, _, _, offset := d.Detect(tc.TestStringHex)
             assert.Equal(t, tc.DetectResult, result)
             assert.Equal(t, tc.DetectOffset, offset)
         })
@@ -285,7 +370,7 @@ func TestTransform(t *testing.T) {
     for _, tc := range testCases {
         t.Run(tc.Name, func(t *testing.T) {
             r, err := d.transform(tc.TestStringHex)
-            assert.ErrorIs(t, tc.TransformError, err)
+            assert.ErrorIs(t, err, tc.TransformError)
             assert.Equal(t, tc.TransformHex, r)
         })
     }
@@ -297,7 +382,7 @@ func TestTransformed(t *testing.T) {
     for _, tc := range testCases {
         t.Run(tc.Name, func(t *testing.T) {
             r, err := d.Transform(tc.TestStringHex)
-            assert.ErrorIs(t, tc.TransformedError, err)
+            assert.ErrorIs(t, err, tc.TransformedError)
             assert.Equal(t, tc.TransformedHex, r)
         })
     }
