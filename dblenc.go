@@ -526,6 +526,10 @@ func (d *Decoder) Transform(b []byte) ([]byte, error) {
         o = x  // new candidate
     }
 
+    if transformErr != nil {
+        o = b
+    }
+
     return o, transformErr
 }
 
