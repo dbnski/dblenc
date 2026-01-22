@@ -335,6 +335,50 @@ var testCases = []TestCase{
         DetectResult:     MAYBE_OTHER,
         DetectOffset:     2,
     },
+    {
+        Name:             "Edge_Case_4",
+        TestStringHex:    []byte("2×"),
+        TransformHex:     decode("32d7"),
+        TransformedHex:   []byte("2×"),
+        TransformedError: ErrNoop,
+        DetectResult:     MAYBE_OTHER,
+        DetectOffset:     2,
+    },
+    {
+        Name:             "Edge_Case_5",
+        TestStringHex:    decode("c3a0c2a0"), // à\u00a0
+        TransformHex:     decode("e0a0"),
+        TransformedHex:   decode("c3a0c2a0"),
+        TransformedError: ErrNoop,
+        DetectResult:     MAYBE_OTHER,
+        DetectOffset:     1,
+    },
+    {
+        Name:             "Edge_Case_6",
+        TestStringHex:    []byte("abcðŸ˜"),
+        TransformHex:     decode("616263f09f98"),
+        TransformedHex:   []byte("abc"),
+        DetectResult:     UNKNOWN,
+        DetectOffset:     4,
+    },
+    {
+        Name:             "Edge_Case_7",
+        TestStringHex:    []byte("nè…"),
+        TransformHex:     decode("6ee885"),
+        TransformedHex:   []byte("nè…"),
+        TransformedError: ErrNoop,
+        DetectResult:     MAYBE_OTHER,
+        DetectOffset:     2,
+    },
+    {
+        Name:             "Edge_Case_8",
+        TestStringHex:    []byte("qué¡"),
+        TransformHex:     decode("7175e9a1"),
+        TransformedHex:   []byte("qué¡"),
+        TransformedError: ErrNoop,
+        DetectResult:     MAYBE_OTHER,
+        DetectOffset:     3,
+    },
 }
 
 var (

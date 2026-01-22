@@ -121,3 +121,16 @@ var Diacritics = [0x0400]Language{
     0x019F: L_GR,                                                                // Ɵ - exception
     0x039F: L_GR,                                                                // Ο - exception
 }
+
+func isClosingPunctuation(r rune) bool {
+    return r == 0x201D || // "
+           r == 0x2019 || // '
+           r == 0x2013 || // –
+           r == 0x2014 || // —
+           r == 0x2026 || // …
+           r == 0x00BF || // ¿
+           r == 0x00A1 || // ¡
+           r == 0x00BB || // »
+           r == 0x00A0 || // nbsp
+           r == 0x00D7    // ×
+}

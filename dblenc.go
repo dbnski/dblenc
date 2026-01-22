@@ -186,6 +186,7 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
     u := uint32(0)  // decoded code unit sequence
     s := 1          // decoded code unit sequence size
 
+    var currentRune rune
     var runeSequence [5]rune
     var sequenceLength int
     var isMultiple bool
@@ -230,7 +231,7 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
             c++
             n++
 
-            currentRune := rune(firstByte & 0x1F) << 6 | rune(currentByte & 0x3F)
+            currentRune = rune(firstByte & 0x1F) << 6 | rune(currentByte & 0x3F)
             if isLatin {
                 latin := false
                 if int(currentRune) < len(Diacritics) {
@@ -331,7 +332,7 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
             c++
             n++
 
-            currentRune := rune(firstByte & 0x0F) << 6 | rune(secondByte & 0x3F) | rune(currentByte & 0x3F)
+            currentRune = rune(firstByte & 0x0F) << 12 | rune(secondByte & 0x3F) << 6 | rune(currentByte & 0x3F)
             if isLatin {
                 latin := false
                 if int(currentRune) < len(Diacritics) {
@@ -428,12 +429,14 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
         panic("we should not be here")
     case r == ERROR:
         panic("we should not be here")
-    case r == UNKNOWN:                          // ends halfway thru possible dobule-encoded sequence
+    case r == UNKNOWN:                          // ends halfway thru a possible double-encoded sequence
         switch {
         case isLatin:                           // all suspects are made exclusively of cp1252 letters
             r = MAYBE_OTHER
-        case e > 0:                             // includes multiple suspects
+        case e > 0:                             // has at least one other suspect
             r = DOUBLE_ENCODED_TRUNCATED
+        case isClosingPunctuation(currentRune): // latin strings end this way (e.g. qué¡)
+            r = MAYBE_OTHER
         }
     case r == DOUBLE_ENCODED:
         if !isMultiple {                        // includes only one distinct suspect
