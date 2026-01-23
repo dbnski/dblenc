@@ -2,7 +2,6 @@ package dblenc
 
 import (
     "errors"
-    "sort"
     "unicode/utf8"
 )
 
@@ -116,7 +115,6 @@ type Callback func(...interface{})
 
 type Decoder struct {
     byteMap *byteMap
-    runeMap []uint32
 
     onRune      Callback
     onTransform Callback
@@ -125,17 +123,7 @@ type Decoder struct {
 func NewDecoder() *Decoder {
     d := &Decoder{
         byteMap: newByteMap(),
-        runeMap: make([]uint32, len(charMap)),
     }
-    for i := 0; i < len(charMap); i++ {
-        // Store the byte code in the upper byte and the rune value
-        // in the lower bytes.
-        d.runeMap[i] = (uint32(i) << 24) | (charMap[i] & 0x00ffffff)
-    }
-    // Sort rune map on rune value.
-    sort.Slice(d.runeMap, func(i, j int) bool {
-        return (d.runeMap[i] & 0x00ffffff) < (d.runeMap[j] & 0x00ffffff)
-    })
     return d
 }
 
@@ -201,8 +189,8 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
         i++
 
         if currentByte < 0x80 {                 // ascii?
-            if r == UNKNOWN {                   // incomplete sequence
-                return OTHER_CHARSET, c, e, f + i  // followed by an ascii
+            if r == UNKNOWN {                   // incomplete sequence followed by an ascii
+                return OTHER_CHARSET, c, e, f + i
             }
             a++
             c++
@@ -215,10 +203,10 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
 
         m := m.next[currentByte]
         if m == nil {                           // byte sequence does not appear
-            return OTHER_CHARSET, c, e, f + i      // in the map
+            return OTHER_CHARSET, c, e, f + i   // in the map
         }
-        if i == len(data) {
-            return ERROR, c, e, f + i              // buffer ends mid-sequence
+        if i == len(data) {                     // buffer ends mid-sequence
+            return ERROR, c, e, f + i
         }
         firstByte := currentByte
 
@@ -409,7 +397,7 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
                 }
             }
 
-            o = min(o, i - 1)
+            o = min(o, i - 2)
 
             continue
         }
@@ -533,14 +521,14 @@ func (d *Decoder) Transform(b []byte) ([]byte, error) {
     return o, transformErr
 }
 
-func (this *Decoder) XTransform(src []byte) (dst []byte, err error) {
+func (this *Decoder) TransformOnce(src []byte) (dst []byte, err error) {
     return this.transform(src)
 }
 
-func (this *Decoder) transform(src []byte) (dst []byte, err error) {
+func (d *Decoder) transform(src []byte) (dst []byte, err error) {
+    // fast path for strings with long ascii prefixes
     pDst := 0
     src = src[:len(src):len(src)]
-    // fast path for strings with long ascii prefixes
     for len(src) >= 8 {
         c1 := uint32(src[0]) | uint32(src[1]) << 8 |
               uint32(src[2]) << 16 | uint32(src[3]) << 24
@@ -561,56 +549,183 @@ func (this *Decoder) transform(src []byte) (dst []byte, err error) {
         src = src[8:]
     }
 
-    // based on golang.org/x/text/encoding/charmap
+    m := d.byteMap  // character map pointer
+    n := 0          // decoded code units counter
+    x := byte(0)    // decoded code unit
+    s := 1          // decoded code unit sequence size
+    u := uint32(0)
+
     pSrc := 0
-    r, size := rune(0), 0
-
     for pSrc < len(src) {
-        r = rune(src[pSrc])
+        // FIRST BYTE
+        currentByte := src[pSrc]
+        pSrc++
 
-        if r < 0x80 {
-            pSrc++
+        if currentByte < 0x80 {                 // ascii?
             if pDst == len(dst) {
                 dst = grow(dst, pDst)
             }
-            dst[pDst] = byte(r)
+            dst[pDst] = currentByte
             pDst++
+
             continue
-        } else {
-            r, size = utf8.DecodeRune(src[pSrc:])
-            if size == 1 {
-                if !utf8.FullRune(src[pSrc:]) {
-                    return nil, ErrInvalid
-                }
-            }
-            pSrc += size
         }
 
-        for low, high := 0x80, 0x100; ; {
-            if low >= high {
-                return nil, ErrInvalid
-            }
-            mid := (low + high) / 2
-            got := this.runeMap[mid]
-            gotRune := rune(got & (1<<24 - 1))
-            if gotRune < r {
-                low = mid + 1
-            } else if gotRune > r {
-                high = mid
-            } else {
-                if pDst == len(dst) {
-                    dst = grow(dst, pDst)
-                }
-                dst[pDst] = byte(got >> 24)
-                pDst++
-                break
-            }
+        if currentByte < 0xC0 {                 // 0x80 - 0xBF cannot appear stand-alone
+            return nil, ErrInvalid
         }
+
+        m := m.next[currentByte]
+        if m == nil {                           // byte sequence does not appear
+            return nil, ErrInvalid              // in the map
+        }
+        if pSrc == len(src) {                   // buffer ends mid-sequence
+            return nil, ErrInvalid
+        }
+
+        // SECOND BYTE
+        currentByte = src[pSrc]
+        pSrc++
+
+        if m.byteMap[currentByte] != 0 {        // matches complete double-encoded character
+            x = m.byteMap[currentByte]
+            n++
+
+            if n == 1 {                         // first byte of decoded code point
+                switch {
+                case x & 0xE0 == 0xC0:          // 2-byte code point
+                    if x < 0xC2 {
+                        return nil, ErrInvalid
+                    }
+                    s = 2
+                case x & 0xF0 == 0xE0:          // 3-byte code point
+                    s = 3
+                case x & 0xF8 == 0xF0:          // 4-byte code point
+                    if x >= 0xF5 {
+                        return nil, ErrInvalid
+                    }
+                    s = 4
+                default:                        // not utf8
+                    return nil, ErrInvalid
+                }
+            } else {                            // continuation bytes of decoded code point
+                if (x & 0xC0) != 0x80 {         // check if valid continuation byte
+                    return nil, ErrInvalid
+                }
+                u = (u << 8) | uint32(x)
+
+                if n == s {                     // decoded complete code unit sequence
+                    if s == 3 {
+                        // UTF16 code points
+                        if u >= 0xEDA080 && u <= 0xEDBFBF {
+                            return nil, ErrInvalid
+                        }
+                    }
+                    if s == 4 {
+                        // UTF16 code points
+                        if u >= 0xF4908080 {
+                            return nil, ErrInvalid
+                        }
+                    }
+                    // out-of-scope code points
+                    if u > 0xF3A087BF {
+                        return nil, ErrInvalid
+                    }
+
+                    n = 0                       // reset decoded code units counter
+                    u = 0                       // reset decoded char
+                }
+            }
+
+            if pDst == len(dst) {
+                dst = grow(dst, pDst)
+            }
+            dst[pDst] = x
+            pDst++
+
+            continue
+        }
+
+        m = m.next[currentByte]
+        if m == nil {
+            return nil, ErrInvalid
+        }
+        if pSrc == len(src) {
+            return nil, ErrInvalid
+        }
+
+        // THIRD BYTE
+        currentByte = src[pSrc]
+        pSrc++
+
+        if m.byteMap[currentByte] != 0 {        // matches complete double-encoded character
+            x = m.byteMap[currentByte]
+            n++
+
+            if n == 1 {                         // first byte of decoded code point
+                switch {
+                case x & 0xE0 == 0xC0:          // 2-byte code point
+                    if x < 0xC2 {
+                        return nil, ErrInvalid
+                    }
+                    s = 2
+                case x & 0xF0 == 0xE0:          // 3-byte code point
+                    s = 3
+                case x & 0xF8 == 0xF0:          // 4-byte code point
+                    if x >= 0xF5 {
+                        return nil, ErrInvalid
+                    }
+                    s = 4
+                default:                        // not utf8
+                    return nil, ErrInvalid
+                }
+            } else {                            // continuation bytes of decoded code point
+                if (x & 0xC0) != 0x80 {         // check if valid continuation byte
+                    return nil, ErrInvalid
+                }
+                u = (u << 8) | uint32(x)
+
+                if n == s {                     // decoded complete code unit sequence
+                    if s == 3 {
+                        // UTF16 code points
+                        if u >= 0xEDA080 && u <= 0xEDBFBF {
+                            return nil, ErrInvalid
+                        }
+                    }
+                    if s == 4 {
+                        // UTF16 code points
+                        if u >= 0xF4908080 {
+                            return nil, ErrInvalid
+                        }
+                    }
+                    // out-of-scope code points
+                    if u > 0xF3A087BF {
+                        return nil, ErrInvalid
+                    }
+
+                    n = 0                       // reset decoded code units counter
+                    u = 0                       // reset decoded char
+                }
+            }
+
+            if pDst == len(dst) {
+                dst = grow(dst, pDst)
+            }
+            dst[pDst] = x
+            pDst++
+
+            continue
+        }
+
+        // FOURTH BYTE
+        return nil, ErrInvalid
     }
+
     dst = dst[:pDst:pDst]
 
     return dst, nil
 }
+
 
 func grow(b []byte, n int) []byte {
     m := len(b)
