@@ -21,9 +21,9 @@ func main() {
     decoder := dblenc.NewDecoder()
 
     for i, sample := range(samples) {
-        result, _ := decoder.Detect(sample)
+        result, _, _, _ := decoder.Detect(sample)
         fixed, err := decoder.Transform(sample)
-        if err != nil {
+        if err != nil && err != dblenc.ErrNoop {
             panic(err)
         }
 
