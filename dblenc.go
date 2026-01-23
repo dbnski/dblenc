@@ -476,7 +476,7 @@ func (d *Decoder) Transform(b []byte) ([]byte, error) {
 
     transformErr := ErrNoop
 
-    for enc == DOUBLE_ENCODED || enc == DOUBLE_ENCODED_TRUNCATED || enc == MAYBE_DOUBLE_ENCODED || enc == UNKNOWN {
+    for enc == DOUBLE_ENCODED || enc == DOUBLE_ENCODED_TRUNCATED || enc == MAYBE_DOUBLE_ENCODED {
         x, err := d.transform(o)
         if err != nil {
             break
