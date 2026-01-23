@@ -1,6 +1,6 @@
 # dblenc
 
-**dblenc** is a Go library for correcting double-encoded (and multiply-encoded) text values that can be found in some MySQL databases. The code was inspired by [`golang.org/x/text/encoding/charmap`](https://pkg.go.dev/golang.org/x/text/encoding/charmap), but which cannot handle these conversions correctly due to differences between true Latin1 and its implementation in MySQL.
+**dblenc** is a Go library for correcting double-encoded (and multiply-encoded) text values that can be found in some MySQL databases. The code was inspired by [`golang.org/x/text/encoding/charmap`](https://pkg.go.dev/golang.org/x/text/encoding/charmap), but which cannot handle these conversions correctly due to slight differences with the character map MySQL uses.
 
 ## Background: The Problem
 
@@ -14,4 +14,8 @@ In MySQL databases, especially those with legacy migration histories, it's not u
 
 ## Caveat
 
-Double-encoded strings use a small subset of UTF-8 characters. As a result, it can be difficult to distinguish between a valid UTF-8 string and a double-encoded one at a glance. Therefore, `Detect()` may occasionally return "double-encoded" for valid UTF-8 strings when such strings don't include any characters that are out of scope for double-encoded sequences. However, `Transform()` called on a false-positive will not alter the string. For a practical illustration, see the example in the [`example/`](example/) directory.
+Double‑encoded strings consist of regular UTF‑8 characters and are themselves well‑formed UTF‑8. There are many edge cases that make it difficult to distinguish a valid UTF‑8 string from a double‑encoded one. As a result, `Detect()` may occasionally produce false positives when a string contains only characters that fall within the range of possible double‑encoded sequences. Similarly, it may produce false negatives when a string includes only a single double‑encoded character. Both cases should be very rare and limited to text in a language whose character set uses - or partially overlaps with - the Windows‑1252 code page.
+
+## Usage
+
+For a practical illustration, see the example in the [`example/`](example/) directory.
