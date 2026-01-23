@@ -637,6 +637,14 @@ var testCases = []TestCase{
         DetectOffset:     1,
     },
     {
+        Name:             "Double_Encoded_Edge_Case_8",
+        TestStringHex:    []byte("koÍžok"),
+        TransformHex:     []byte("ko͞ok"),
+        TransformedHex:   []byte("ko͞ok"),
+        DetectResult:     MAYBE_DOUBLE_ENCODED,
+        DetectOffset:     3,
+    },
+    {
         Name:             "UTF8_Edge_Case_1",
         TestStringHex:    []byte("Úžasná"),
         TransformHex:     decode("da9e61736ee1"),

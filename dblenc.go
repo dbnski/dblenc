@@ -275,8 +275,8 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
                 if n == s {                     // decoded complete code unit sequence
                     if s == 2 {
                         decodedRune := rune((((u >> 8) & 0x1F) << 6) | ((u & 0xFF) & 0x3F))
-                        if int(decodedRune) < len(Diacritics) {
-                            isDecodedLanguage = isDecodedLanguage & Diacritics[decodedRune]
+                        if int(decodedRune) < len(DecodedDiacritics) {
+                            isDecodedLanguage = isDecodedLanguage & DecodedDiacritics[decodedRune]
                         }
                     }
                     if s == 3 {
@@ -376,8 +376,8 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
                 if n == s {                     // decoded complete code unit sequence
                     if s == 2 {
                         decodedRune := rune((((u >> 8) & 0x1F) << 6) | ((u & 0xFF) & 0x3F))
-                        if int(decodedRune) < len(Diacritics) {
-                            isDecodedLanguage = isDecodedLanguage & Diacritics[decodedRune]
+                        if int(decodedRune) < len(DecodedDiacritics) {
+                            isDecodedLanguage = isDecodedLanguage & DecodedDiacritics[decodedRune]
                         }
                     }
                     if s == 3 {

@@ -4,6 +4,7 @@ type Language uint32
 
 // Langauges that use CP1252
 const (
+    L_ANY  Language = ^Language(0) & ^(Language(1) << 31)
     L_NONE Language = 0
     L_FR   Language = 1 << (iota - 1) // french
     L_PT                              // portuguese
@@ -99,27 +100,28 @@ var Diacritics = [0x0400]Language{
     0x00FD: L_IS | L_FO,                                                         // ý
     0x00FE: L_IS,                                                                // þ
     0x00FF: L_FR | L_NL,                                                         // ÿ
-
-    0x010A: L_MT,                                                                // Ċ - exception
-    0x010C: L_CZ | L_SK,                                                         // Č - exception
-    0x010E: L_CZ | L_SK,                                                         // Ď - exception
-    0x011A: L_CZ | L_SK,                                                         // Ě - exception
-    0x011E: L_TR,                                                                // Ğ - exception
-    0x011F: L_TR,                                                                // ğ - exception
-    0x0121: L_MT,                                                                // ġ - exception
-    0x014C: L_FK,                                                                // Ō - exception
-    0x015E: L_AZ | L_TR,                                                         // Ş - exception
-    0x015F: L_AZ | L_TR,                                                         // ş - exception
-    0x015A: L_PL,                                                                // Ś - exception
-
     0x0160: L_CZ | L_SK | L_ET,                                                  // Š
     0x0161: L_CZ | L_SK | L_ET,                                                  // š
     0x0178: L_FR | L_NL,                                                         // Ÿ
     0x017D: L_CZ | L_SK | L_ET,                                                  // Ž
     0x017E: L_CZ | L_SK | L_ET,                                                  // ž
+}
 
-    0x019F: L_GR,                                                                // Ɵ - exception
-    0x039F: L_GR,                                                                // Ο - exception
+var DecodedDiacritics = [0x0400]Language{
+    0x010A: L_MT,                                                                // Ċ
+    0x010C: L_CZ | L_SK,                                                         // Č
+    0x010E: L_CZ | L_SK,                                                         // Ď
+    0x011A: L_CZ | L_SK,                                                         // Ě
+    0x011E: L_TR,                                                                // Ğ
+    0x011F: L_TR,                                                                // ğ
+    0x0121: L_MT,                                                                // ġ
+    0x014C: L_FK,                                                                // Ō
+    0x015E: L_AZ | L_TR,                                                         // Ş
+    0x015F: L_AZ | L_TR,                                                         // ş
+    0x015A: L_PL,                                                                // Ś
+    0x019F: L_GR,                                                                // Ɵ
+    0x035E: L_ANY,                                                               // combining diacritical mark
+    0x039F: L_GR,                                                                // Ο
 }
 
 func isClosingPunctuation(r rune) bool {
