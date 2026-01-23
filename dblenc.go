@@ -413,29 +413,36 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
     switch {
     case r == ASCII:
         // do not touch me
+
     case r == OTHER_CHARSET:
         panic("we should not be here")
+
     case r == ERROR:
         panic("we should not be here")
-    case r == UNKNOWN:                          // ends halfway thru a possible double-encoded sequence
+
+    case r == UNKNOWN:                          // if string ends halfway in what could be a double encoded character
         switch {
-        case isLatin:                           // all suspects are made exclusively of cp1252 letters
-            r = MAYBE_OTHER
-        case e > 0:                             // has at least one other suspect
-            r = DOUBLE_ENCODED_TRUNCATED
-        case isClosingPunctuation(currentRune): // latin strings end this way (e.g. qué¡)
-            r = MAYBE_OTHER
+        case isLatin:                           // if all suspects are made exclusively of cp1252 letters,
+            r = MAYBE_OTHER                     // assume the string is not double encoded (e.g. "Úžasná")
+
+        case e > 0:                             // if there's at least one other suspect,
+            r = DOUBLE_ENCODED_TRUNCATED        // assume it's a truncated double encoded string (e.g. "MATÄšJ [..] Tomáš")
+
+        case isClosingPunctuation(currentRune): // if it's the only suspect and the final char is "closing" punctuation (e.g. "qué¡"),
+            r = MAYBE_OTHER                     // assume it's not double encoded
         }
-    case r == DOUBLE_ENCODED:
-        if !isMultiple {                        // includes only one distinct suspect
-            r = MAYBE_DOUBLE_ENCODED
-            if isLatin {                        // all suspects are made exclusively of cp1252 letters
-                if isLanguage > 0 {             // all those letters are used by the same language
-                    r = MAYBE_OTHER
+
+    case r == DOUBLE_ENCODED:                   // if the string was classified as double encoded
+        if !isMultiple {                        // but, it has just one unique double encoded sequence,
+            r = MAYBE_DOUBLE_ENCODED            // assume it's double-encoded (e.g. "ÄŽakujem [..] ÄŽakujem")
+
+            if isLatin {                        // if the suspect is made exclusively of cp1252 letters
+                if isLanguage > 0 {             // and all those letters are used by the same language,
+                    r = MAYBE_OTHER             // assume it's not double encoded (e.g. "Úžasna")
                 }
-                if isDecodedLanguage > 0 &&     // all decoded letters are used by a latin language
-                   isDecodedLanguage < ^Language(0) {
-                    r = MAYBE_DOUBLE_ENCODED    // covers known exceptions
+                if isDecodedLanguage > 0 &&            // except if the decoded letter(s) is a known exception
+                   isDecodedLanguage < ^Language(0) {  // like ĊČĎĚĞğġŌŞşŚƟΟ (e.g. "DoÄŸan" -> "Doğan")
+                    r = MAYBE_DOUBLE_ENCODED
                 }
             }
         }
