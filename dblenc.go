@@ -5,14 +5,12 @@ import (
     "unicode/utf8"
 )
 
-var DEBUG = false
-
 var (
     ErrInvalid = errors.New("invalid byte sequence")
     ErrNoop    = errors.New("nothing changed")
 )
 
-var charMap = [256]uint32{
+var charMap = [256]rune{
     0x0000, 0x0001, 0x0002, 0x0003, 0x0004, 0x0005, 0x0006, 0x0007,
     0x0008, 0x0009, 0x000A, 0x000B, 0x000C, 0x000D, 0x000E, 0x000F,
     0x0010, 0x0011, 0x0012, 0x0013, 0x0014, 0x0015, 0x0016, 0x0017,
@@ -49,9 +47,9 @@ var charMap = [256]uint32{
 
 type Encoding byte
 const (
-    UNKNOWN                  Encoding = iota
+    UNKNOWN                  Encoding = 1 << iota
     ASCII
-    MAYBE_OTHER
+    MAYBE_OTHER_CHARSET
     OTHER_CHARSET
     MAYBE_DOUBLE_ENCODED
     DOUBLE_ENCODED_TRUNCATED
@@ -71,8 +69,8 @@ func (r Encoding) String() string {
         return "maybe-double-encoded"
     case DOUBLE_ENCODED_TRUNCATED:
         return "double-encoded-truncated"
-    case MAYBE_OTHER:
-        return "maybe-other"
+    case MAYBE_OTHER_CHARSET:
+        return "maybe-other-charset"
     case ERROR:
         return "error"
     default:
@@ -86,29 +84,26 @@ type byteMap struct {
 }
 
 func newByteMap() *byteMap {
-    m := &byteMap{}
-    buf := make([]byte, utf8.UTFMax)
+    buf  := make([]byte, utf8.UTFMax)
+    root := &byteMap{}
 
-    for i, u := range charMap {
-        ptr := m
-
-        r := rune(u)
+    for i, r := range charMap {
         n := utf8.EncodeRune(buf, r)
-
+        m := root
         for j := 0; j < utf8.UTFMax; j++ {
             code := buf[j]
             if n == j + 1 {
-                ptr.byteMap[code] = byte(i)
+                m.byteMap[code] = byte(i)
                 break
             }
-            if ptr.next[code] == nil {
-                ptr.next[code] = &byteMap{}
+            if m.next[code] == nil {
+                m.next[code] = &byteMap{}
             }
-            ptr = ptr.next[code]
+            m = m.next[code]
         }
     }
 
-    return m
+    return root
 }
 
 type Callback func(...interface{})
@@ -121,10 +116,9 @@ type Decoder struct {
 }
 
 func NewDecoder() *Decoder {
-    d := &Decoder{
+    return &Decoder{
         byteMap: newByteMap(),
     }
-    return d
 }
 
 func (d *Decoder) OnRune(callback Callback) *Decoder {
@@ -137,14 +131,11 @@ func (d *Decoder) OnTransform(callback Callback) *Decoder {
     return d
 }
 
-// The function quickly tests a byte slice for presence of double-encoded
-// characters. It will correctly classify strings that are not double-encoded,
-// but may occasionally flag legitimate UTF-8 strings as double-encoded - such
-// cases require separate verification which is intentionally omitted here
-// in favour of the function's performance.
+// The function tests a byte slice for presence of double-encoded
+// characters. 
 func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
     // fast path for strings with long ascii prefixes
-    f := 0 // fast-forward index
+    f := 0
     data = data[:len(data):len(data)]
     for len(data) >= 8 {
         c1 := uint32(data[0]) | uint32(data[1]) << 8 |
@@ -167,16 +158,16 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
     c := 0          // code point counter
     e := 0          // double-encoded code point counter
     i := 0          // buffer position index
-    n := 0          // decoded code units counter
+    u := uint32(0)  // decoded code unit sequence
+    s := uint8(1)   // decoded code unit sequence length
+    n := uint8(0)   // decoded code units counter
 
     o := len(data)  // position of the first double-encoded sequence
     x := byte(0)    // decoded code unit
-    u := uint32(0)  // decoded code unit sequence
-    s := 1          // decoded code unit sequence size
 
     var currentRune rune
     var runeSequence [5]rune
-    var sequenceLength int
+    var sequenceLength uint8
     var isMultiple bool
     var isLatin bool = true
     var isLanguage Language = ^Language(0)
@@ -380,8 +371,9 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
                             return OTHER_CHARSET, c, e, f + i
                         }
                     }
-                    if s > 0xF3A087BF {
-                        return ERROR, c, e, f + i
+                    // out-of-scope code points
+                    if u > 0xF3A087BF {
+                        return OTHER_CHARSET, c, e, f + i
                     }
 
                     if d.onRune != nil {
@@ -423,13 +415,13 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
     case r == UNKNOWN:                          // if string ends halfway in what could be a double encoded character
         switch {
         case isLatin:                           // if all suspects are made exclusively of cp1252 letters,
-            r = MAYBE_OTHER                     // assume the string is not double encoded (e.g. "Úžasná")
+            r = MAYBE_OTHER_CHARSET             // assume the string is not double encoded (e.g. "Úžasná")
 
         case e > 0:                             // if there's at least one other suspect,
             r = DOUBLE_ENCODED_TRUNCATED        // assume it's a truncated double encoded string (e.g. "MATÄšJ [..] Tomáš")
 
         case isClosingPunctuation(currentRune): // if it's the only suspect and the final char is "closing" punctuation (e.g. "qué¡"),
-            r = MAYBE_OTHER                     // assume it's not double encoded
+            r = MAYBE_OTHER_CHARSET             // assume it's not double encoded
         }
 
     case r == DOUBLE_ENCODED:                   // if the string was classified as double encoded
@@ -438,7 +430,7 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
 
             if isLatin {                        // if the suspect is made exclusively of cp1252 letters
                 if isLanguage > 0 {             // and all those letters are used by the same language,
-                    r = MAYBE_OTHER             // assume it's not double encoded (e.g. "Úžasna")
+                    r = MAYBE_OTHER_CHARSET     // assume it's not double encoded (e.g. "Úžasna")
                 }
                 if isDecodedLanguage > 0 &&            // except if the decoded letter(s) is a known exception
                    isDecodedLanguage < ^Language(0) {  // like ĊČĎĚĞğġŌŞşŚƟΟ (e.g. "DoÄŸan" -> "Doğan")
@@ -476,7 +468,7 @@ func (d *Decoder) Transform(b []byte) ([]byte, error) {
 
     transformErr := ErrNoop
 
-    for enc == DOUBLE_ENCODED || enc == DOUBLE_ENCODED_TRUNCATED || enc == MAYBE_DOUBLE_ENCODED {
+    for enc & (MAYBE_DOUBLE_ENCODED|DOUBLE_ENCODED|DOUBLE_ENCODED_TRUNCATED) != 0 {
         x, err := d.transform(o)
         if err != nil {
             break

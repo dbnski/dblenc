@@ -663,7 +663,7 @@ var testCases = []TestCase{
         TransformHex:     decode("da9e61736ee1"),
         TransformedHex:   []byte("Úžasná"),
         TransformedError: ErrNoop,
-        DetectResult:     MAYBE_OTHER,
+        DetectResult:     MAYBE_OTHER_CHARSET,
         DetectOffset:     1,
     },
     {
@@ -672,7 +672,7 @@ var testCases = []TestCase{
         TransformHex:     decode("da9e61736e"),
         TransformedHex:   []byte("Úžasn"),
         TransformedError: ErrNoop,
-        DetectResult:     MAYBE_OTHER,
+        DetectResult:     MAYBE_OTHER_CHARSET,
         DetectOffset:     1,
     },
     {
@@ -681,7 +681,7 @@ var testCases = []TestCase{
         TransformHex:     decode("4dcd9a6872e5"),
         TransformedHex:   []byte("MÍšhrå"),
         TransformedError: ErrNoop,
-        DetectResult:     MAYBE_OTHER,
+        DetectResult:     MAYBE_OTHER_CHARSET,
         DetectOffset:     2,
     },
     {
@@ -690,7 +690,7 @@ var testCases = []TestCase{
         TransformHex:     decode("32d7"),
         TransformedHex:   []byte("2×"),
         TransformedError: ErrNoop,
-        DetectResult:     MAYBE_OTHER,
+        DetectResult:     MAYBE_OTHER_CHARSET,
         DetectOffset:     2,
     },
     {
@@ -699,7 +699,7 @@ var testCases = []TestCase{
         TransformHex:     decode("e0a0"),
         TransformedHex:   decode("c3a0c2a0"),
         TransformedError: ErrNoop,
-        DetectResult:     MAYBE_OTHER,
+        DetectResult:     MAYBE_OTHER_CHARSET,
         DetectOffset:     1,
     },
     {
@@ -717,7 +717,7 @@ var testCases = []TestCase{
         TransformHex:     decode("6ee885"),
         TransformedHex:   []byte("nè…"),
         TransformedError: ErrNoop,
-        DetectResult:     MAYBE_OTHER,
+        DetectResult:     MAYBE_OTHER_CHARSET,
         DetectOffset:     2,
     },
     {
@@ -726,7 +726,7 @@ var testCases = []TestCase{
         TransformHex:     decode("7175e9a1"),
         TransformedHex:   []byte("qué¡"),
         TransformedError: ErrNoop,
-        DetectResult:     MAYBE_OTHER,
+        DetectResult:     MAYBE_OTHER_CHARSET,
         DetectOffset:     3,
     },
     {
@@ -735,7 +735,7 @@ var testCases = []TestCase{
         TransformHex:     decode("4adc8a742047d8"),
         TransformedHex:   []byte("JÜŠt GØ"),
         TransformedError: ErrNoop,
-        DetectResult:     MAYBE_OTHER,
+        DetectResult:     MAYBE_OTHER_CHARSET,
         DetectOffset:     2,
     },
 }
