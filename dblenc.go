@@ -444,29 +444,35 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
 }
 
 func (d *Decoder) Transform(b []byte) ([]byte, error) {
-    o := b
-
-    enc, _, _, _ := d.Detect(o)
-    // try to recover from an incomplete trailing sequence
-    if enc == ERROR {
-        for p := len(b) - 1; p >= 0 && p >= len(b) - utf8.UTFMax; p-- {
-            if o[p] == 0xC2 || o[p] == 0xC3 || o[p] == 0xC5 ||
-                o[p] == 0xC6 || o[p] == 0xCB || o[p] == 0xE2 {
-                // re-check the shorter string
-                enc, _, _, _ = d.Detect(o[:p])
-                if enc != ERROR {
-                    // discard the broken sequence
-                    o = o[:p]
-                    if d.onTransform != nil {
-                        d.onTransform(enc, o)
-                    }
-                }
-                break
-            }
-        }
+    if len(b) == 0 {
+        return nil, ErrNoop
     }
 
     transformErr := ErrNoop
+    o := b
+
+    // test for and discard incomplete trailing sequence
+    p := len(o) - 1
+    for p >= max(0, len(o) - utf8.UTFMax) {
+        if o[p] < 0x80 {
+            break
+        }
+        if o[p] >= 0xC2 && o[p] <= 0xF4 {
+            if !utf8.FullRune(o[p:]) {
+                o = o[:p]
+                if d.onTransform != nil {
+                    d.onTransform(UNKNOWN, o)
+                }
+            }
+            break
+        }
+        p--
+    }
+    if p < max(0, len(o) - utf8.UTFMax) {
+        return nil, ErrInvalid
+    }
+
+    enc, _, _, _ := d.Detect(o)
 
     for enc & (MAYBE_DOUBLE_ENCODED|DOUBLE_ENCODED|DOUBLE_ENCODED_TRUNCATED) != 0 {
         x, err := d.transform(o)
@@ -477,40 +483,37 @@ func (d *Decoder) Transform(b []byte) ([]byte, error) {
             d.onTransform(enc, x)
         }
 
-        // validate the suffix if it's not an ascii char
-        if x[len(x) - 1] >= 0x80 {
-            p := len(x) - 1
-            // search for the start of a utf8 sequence
-            for p >= 0 && p >= len(x) - utf8.UTFMax {
-                if x[p] >= 0xC2 && x[p] <= 0xF4 {
-                    valid := utf8.Valid(x[p:])
-                    if !valid {
-                        // trailing sequence is invalid, discard it
-                        x = x[:p]
-                        if d.onTransform != nil {
-                            d.onTransform(enc, x)
-                        }
-                    }
-                    break
-                }
-                p--
-            }
-            if p < len(x) - utf8.UTFMax {
-                // no ascii or utf8 sequence found
+        // test for and discard incomplete trailing sequence
+        p := len(x) - 1
+        for p >= max(0, len(x) - utf8.UTFMax) {
+            if x[p] < 0x80 {
                 break
             }
+            if x[p] >= 0xC2 && x[p] <= 0xF4 {
+                if !utf8.FullRune(x[p:]) {
+                    x = x[:p]
+                    if d.onTransform != nil {
+                        d.onTransform(enc, x)
+                    }
+                }
+                break
+            }
+            p--
+        }
+        if p < max(0, len(x) - utf8.UTFMax) {
+            break
         }
 
         valid := utf8.Valid(x)
         if !valid {
             // this iteration got us nowhere good
-            // break
+            break
         }
 
         transformErr = nil
         enc, _, _, _ = d.Detect(x)
 
-        o = x  // new candidate
+        o = x  // found new candidate
     }
 
     if transformErr != nil {
@@ -520,7 +523,7 @@ func (d *Decoder) Transform(b []byte) ([]byte, error) {
     return o, transformErr
 }
 
-func (this *Decoder) TransformOnce(src []byte) (dst []byte, err error) {
+func (this *Decoder) JustTransform(src []byte) (dst []byte, err error) {
     return this.transform(src)
 }
 
