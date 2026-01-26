@@ -47,7 +47,7 @@ var charMap = [256]rune{
 
 type Encoding byte
 const (
-    UNKNOWN                  Encoding = 1 << iota
+    UNKNOWN                  Encoding = iota
     ASCII
     MAYBE_UTF8
     UTF8
@@ -163,7 +163,6 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
     n := uint8(0)   // decoded code units counter
 
     o := len(data)  // position of the first double-encoded sequence
-    x := byte(0)    // decoded code unit
 
     var currentRune rune
     var runeSequence [5]rune
@@ -206,7 +205,7 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
         i++
 
         if m.byteMap[currentByte] != 0 {        // matches complete double-encoded character
-            x = m.byteMap[currentByte]
+            x := m.byteMap[currentByte]         // get the decoded byte code
             c++
             n++
 
@@ -257,22 +256,16 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
                         if int(decodedRune) < len(DecodedDiacritics) {
                             isDecodedLanguage = isDecodedLanguage & DecodedDiacritics[decodedRune]
                         }
-                    }
-                    if s == 3 {
+                    } else if s == 3 {
                         // UTF16 code points
                         if u >= 0xEDA080 && u <= 0xEDBFBF {
                             return UTF8, c, e, f + i
                         }
-                    }
-                    if s == 4 {
-                        // UTF16 code points
-                        if u >= 0xF4908080 {
+                    } else if s == 4 {
+                        // out-of-scope code points
+                        if u > 0xF3A087BF {
                             return UTF8, c, e, f + i
                         }
-                    }
-                    // out-of-scope code points
-                    if u > 0xF3A087BF {
-                        return UTF8, c, e, f + i
                     }
 
                     if d.onRune != nil {
@@ -307,7 +300,7 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
         i++
 
         if m.byteMap[currentByte] != 0 {        // matches complete double-encoded character
-            x = m.byteMap[currentByte]
+            x := m.byteMap[currentByte]         // get the decoded byte code
             c++
             n++
 
@@ -358,22 +351,16 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
                         if int(decodedRune) < len(DecodedDiacritics) {
                             isDecodedLanguage = isDecodedLanguage & DecodedDiacritics[decodedRune]
                         }
-                    }
-                    if s == 3 {
+                    } else if s == 3 {
                         // UTF16 code points
                         if u >= 0xEDA080 && u <= 0xEDBFBF {
                             return UTF8, c, e, f + i
                         }
-                    }
-                    if s == 4 {
-                        // UTF16 code points
-                        if u >= 0xF4908080 {
+                    } else if s == 4 {
+                        // out-of-scope code points
+                        if u > 0xF3A087BF {
                             return UTF8, c, e, f + i
                         }
-                    }
-                    // out-of-scope code points
-                    if u > 0xF3A087BF {
-                        return UTF8, c, e, f + i
                     }
 
                     if d.onRune != nil {
@@ -474,7 +461,7 @@ func (d *Decoder) Transform(b []byte) ([]byte, error) {
 
     enc, _, _, _ := d.Detect(o)
 
-    for enc & (MAYBE_DOUBLE_ENCODED|DOUBLE_ENCODED|DOUBLE_ENCODED_TRUNCATED) != 0 {
+    for enc == MAYBE_DOUBLE_ENCODED || enc == DOUBLE_ENCODED || enc == DOUBLE_ENCODED_TRUNCATED {
         x, err := d.transform(o)
         if err != nil {
             break
@@ -622,16 +609,11 @@ func (d *Decoder) transform(src []byte) (dst []byte, err error) {
                         if u >= 0xEDA080 && u <= 0xEDBFBF {
                             return nil, ErrInvalid
                         }
-                    }
-                    if s == 4 {
-                        // UTF16 code points
-                        if u >= 0xF4908080 {
+                    } else if s == 4 {
+                        // out-of-scope code points
+                        if u > 0xF3A087BF {
                             return nil, ErrInvalid
                         }
-                    }
-                    // out-of-scope code points
-                    if u > 0xF3A087BF {
-                        return nil, ErrInvalid
                     }
 
                     n = 0                       // reset decoded code units counter
@@ -693,16 +675,11 @@ func (d *Decoder) transform(src []byte) (dst []byte, err error) {
                         if u >= 0xEDA080 && u <= 0xEDBFBF {
                             return nil, ErrInvalid
                         }
-                    }
-                    if s == 4 {
-                        // UTF16 code points
-                        if u >= 0xF4908080 {
+                    } else if s == 4 {
+                        // out-of-scope code points
+                        if u > 0xF3A087BF {
                             return nil, ErrInvalid
                         }
-                    }
-                    // out-of-scope code points
-                    if u > 0xF3A087BF {
-                        return nil, ErrInvalid
                     }
 
                     n = 0                       // reset decoded code units counter
@@ -727,7 +704,6 @@ func (d *Decoder) transform(src []byte) (dst []byte, err error) {
 
     return dst, nil
 }
-
 
 func grow(b []byte, n int) []byte {
     m := len(b)
