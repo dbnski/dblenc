@@ -38,7 +38,7 @@ var testCases = []TestCase{
         TransformError:   ErrInvalid,
         TransformedHex:   []byte("Zażółć gęślą jaźń"),
         TransformedError: ErrNoop,
-        DetectResult:     OTHER_CHARSET,
+        DetectResult:     UTF8,
         DetectOffset:     3,
     },
     {
@@ -49,7 +49,7 @@ var testCases = []TestCase{
         TransformError:   ErrInvalid,
         TransformedHex:   []byte("Héllo çà va très bien"),
         TransformedError: ErrNoop,
-        DetectResult:     OTHER_CHARSET,
+        DetectResult:     UTF8,
         DetectOffset:     4,
     },
     {
@@ -60,7 +60,7 @@ var testCases = []TestCase{
         TransformError:   ErrInvalid,
         TransformedHex:   []byte("Guten Tag, wie geht's? Größe, Ärger, Übung"),
         TransformedError: ErrNoop,
-        DetectResult:     OTHER_CHARSET,
+        DetectResult:     UTF8,
         DetectOffset:     27,
     },
     {
@@ -71,7 +71,7 @@ var testCases = []TestCase{
         TransformError:   ErrInvalid,
         TransformedHex:   []byte("Città, perché, caffè"),
         TransformedError: ErrNoop,
-        DetectResult:     OTHER_CHARSET,
+        DetectResult:     UTF8,
         DetectOffset:     7,
     },
     {
@@ -82,7 +82,7 @@ var testCases = []TestCase{
         TransformError:   ErrInvalid,
         TransformedHex:   []byte("São Paulo, ação, coração"),
         TransformedError: ErrNoop,
-        DetectResult:     OTHER_CHARSET,
+        DetectResult:     UTF8,
         DetectOffset:     4,
     },
     {
@@ -93,7 +93,7 @@ var testCases = []TestCase{
         TransformError:   ErrInvalid,
         TransformedHex:   []byte("Příliš žluťoučký kůň"),
         TransformedError: ErrNoop,
-        DetectResult:     OTHER_CHARSET,
+        DetectResult:     UTF8,
         DetectOffset:     2,
     },
     {
@@ -104,7 +104,7 @@ var testCases = []TestCase{
         TransformError:   ErrInvalid,
         TransformedHex:   []byte("Доброго дня, Україна"),
         TransformedError: ErrNoop,
-        DetectResult:     OTHER_CHARSET,
+        DetectResult:     UTF8,
         DetectOffset:     1,
     },
     {
@@ -115,7 +115,7 @@ var testCases = []TestCase{
         TransformError:   ErrInvalid,
         TransformedHex:   []byte("你好世界"),
         TransformedError: ErrNoop,
-        DetectResult:     OTHER_CHARSET,
+        DetectResult:     UTF8,
         DetectOffset:     1,
     },
     {
@@ -126,7 +126,7 @@ var testCases = []TestCase{
         TransformError:   ErrInvalid,
         TransformedHex:   []byte("こんにちは世界、カタカナもあります"),
         TransformedError: ErrNoop,
-        DetectResult:     OTHER_CHARSET,
+        DetectResult:     UTF8,
         DetectOffset:     1,
     },
     {
@@ -137,7 +137,7 @@ var testCases = []TestCase{
         TransformError:   ErrInvalid,
         TransformedHex:   []byte("안녕하세요 세계"),
         TransformedError: ErrNoop,
-        DetectResult:     OTHER_CHARSET,
+        DetectResult:     UTF8,
         DetectOffset:     1,
     },
     {
@@ -148,7 +148,7 @@ var testCases = []TestCase{
         TransformError:   ErrInvalid,
         TransformedHex:   []byte("สวัสดีครับ"),
         TransformedError: ErrNoop,
-        DetectResult:     OTHER_CHARSET,
+        DetectResult:     UTF8,
         DetectOffset:     1,
     },
     {
@@ -159,7 +159,7 @@ var testCases = []TestCase{
         TransformError:   ErrInvalid,
         TransformedHex:   []byte("Xin chào thế giới"),
         TransformedError: ErrNoop,
-        DetectResult:     OTHER_CHARSET,
+        DetectResult:     UTF8,
         DetectOffset:     9,
     },
     {
@@ -170,7 +170,7 @@ var testCases = []TestCase{
         TransformError:   ErrInvalid,
         TransformedHex:   []byte("مرحبا بالعالم"),
         TransformedError: ErrNoop,
-        DetectResult:     OTHER_CHARSET,
+        DetectResult:     UTF8,
         DetectOffset:     1,
     },
     {
@@ -181,7 +181,7 @@ var testCases = []TestCase{
         TransformError:   ErrInvalid,
         TransformedHex:   []byte("שלום עולם"),
         TransformedError: ErrNoop,
-        DetectResult:     OTHER_CHARSET,
+        DetectResult:     UTF8,
         DetectOffset:     1,
     },
     {
@@ -192,7 +192,7 @@ var testCases = []TestCase{
         TransformError:   ErrInvalid,
         TransformedHex:   []byte("नमस्ते दुनिया"),
         TransformedError: ErrNoop,
-        DetectResult:     OTHER_CHARSET,
+        DetectResult:     UTF8,
         DetectOffset:     1,
     },
     {
@@ -203,7 +203,7 @@ var testCases = []TestCase{
         TransformError:   ErrInvalid,
         TransformedHex:   []byte("Γεια σου κόσμε"),
         TransformedError: ErrNoop,
-        DetectResult:     OTHER_CHARSET,
+        DetectResult:     UTF8,
         DetectOffset:     1,
     },
     {
@@ -214,7 +214,7 @@ var testCases = []TestCase{
         TransformError:   ErrInvalid,
         TransformedHex:   []byte("Բարեւ աշխարհ"),
         TransformedError: ErrNoop,
-        DetectResult:     OTHER_CHARSET,
+        DetectResult:     UTF8,
         DetectOffset:     1,
     },
     {
@@ -225,7 +225,7 @@ var testCases = []TestCase{
         TransformError:   ErrInvalid,
         TransformedHex:   []byte("😀"),
         TransformedError: ErrNoop,
-        DetectResult:     OTHER_CHARSET,
+        DetectResult:     UTF8,
         DetectOffset:     1,
     },
     {
@@ -236,7 +236,7 @@ var testCases = []TestCase{
         TransformError:   ErrInvalid,
         TransformedHex:   []byte("😀😃😄😁"),
         TransformedError: ErrNoop,
-        DetectResult:     OTHER_CHARSET,
+        DetectResult:     UTF8,
         DetectOffset:     1,
     },
     {
@@ -247,7 +247,7 @@ var testCases = []TestCase{
         TransformError:   ErrInvalid,
         TransformedHex:   []byte("👍🏻👍🏼👍🏽👍🏾👍🏿"),
         TransformedError: ErrNoop,
-        DetectResult:     OTHER_CHARSET,
+        DetectResult:     UTF8,
         DetectOffset:     1,
     },
     {
@@ -258,7 +258,7 @@ var testCases = []TestCase{
         TransformError:   ErrInvalid,
         TransformedHex:   []byte("👨‍👩‍👧‍👦👨‍💻"),
         TransformedError: ErrNoop,
-        DetectResult:     OTHER_CHARSET,
+        DetectResult:     UTF8,
         DetectOffset:     1,
     },
     {
@@ -269,7 +269,7 @@ var testCases = []TestCase{
         TransformError:   ErrInvalid,
         TransformedHex:   []byte("Hello 👋 World 🌍"),
         TransformedError: ErrNoop,
-        DetectResult:     OTHER_CHARSET,
+        DetectResult:     UTF8,
         DetectOffset:     7,
     },
     {
@@ -590,7 +590,7 @@ var testCases = []TestCase{
         TransformError:   ErrInvalid,
         TransformedHex:   []byte("Caf\xC3\x83\xC2\xA9\xC3\xA3\xC2\x81\xC2\xA7\xC3\xA3\xE2\x80\x9A\xC2\xB3\xC3\xA3\xC6\x92\xC2\xBC\xC3\xA3\xC6\x92\xE2\x80\x99\xC3\xA3\xC6\x92\xC2\xBC\xC3\xA3\xE2\x80\x9A\xE2\x80\x99\xC3\xA9\xC2\x20\xC2\xB2\xC3\xA3\xE2\x80\x9A"),
         TransformedError: ErrNoop,
-        DetectResult:     OTHER_CHARSET,
+        DetectResult:     UTF8,
         DetectOffset:     50,
     },
     {
@@ -663,7 +663,7 @@ var testCases = []TestCase{
         TransformHex:     decode("da9e61736ee1"),
         TransformedHex:   []byte("Úžasná"),
         TransformedError: ErrNoop,
-        DetectResult:     MAYBE_OTHER_CHARSET,
+        DetectResult:     MAYBE_UTF8,
         DetectOffset:     1,
     },
     {
@@ -672,7 +672,7 @@ var testCases = []TestCase{
         TransformHex:     decode("da9e61736e"),
         TransformedHex:   []byte("Úžasn"),
         TransformedError: ErrNoop,
-        DetectResult:     MAYBE_OTHER_CHARSET,
+        DetectResult:     MAYBE_UTF8,
         DetectOffset:     1,
     },
     {
@@ -681,7 +681,7 @@ var testCases = []TestCase{
         TransformHex:     decode("4dcd9a6872e5"),
         TransformedHex:   []byte("MÍšhrå"),
         TransformedError: ErrNoop,
-        DetectResult:     MAYBE_OTHER_CHARSET,
+        DetectResult:     MAYBE_UTF8,
         DetectOffset:     2,
     },
     {
@@ -690,7 +690,7 @@ var testCases = []TestCase{
         TransformHex:     decode("32d7"),
         TransformedHex:   []byte("2×"),
         TransformedError: ErrNoop,
-        DetectResult:     MAYBE_OTHER_CHARSET,
+        DetectResult:     MAYBE_UTF8,
         DetectOffset:     2,
     },
     {
@@ -699,7 +699,7 @@ var testCases = []TestCase{
         TransformHex:     decode("e0a0"),
         TransformedHex:   decode("c3a0c2a0"),
         TransformedError: ErrNoop,
-        DetectResult:     MAYBE_OTHER_CHARSET,
+        DetectResult:     MAYBE_UTF8,
         DetectOffset:     1,
     },
     {
@@ -717,7 +717,7 @@ var testCases = []TestCase{
         TransformHex:     decode("6ee885"),
         TransformedHex:   []byte("nè…"),
         TransformedError: ErrNoop,
-        DetectResult:     MAYBE_OTHER_CHARSET,
+        DetectResult:     MAYBE_UTF8,
         DetectOffset:     2,
     },
     {
@@ -726,7 +726,7 @@ var testCases = []TestCase{
         TransformHex:     decode("7175e9a1"),
         TransformedHex:   []byte("qué¡"),
         TransformedError: ErrNoop,
-        DetectResult:     MAYBE_OTHER_CHARSET,
+        DetectResult:     MAYBE_UTF8,
         DetectOffset:     3,
     },
     {
@@ -735,7 +735,7 @@ var testCases = []TestCase{
         TransformHex:     decode("4adc8a742047d8"),
         TransformedHex:   []byte("JÜŠt GØ"),
         TransformedError: ErrNoop,
-        DetectResult:     MAYBE_OTHER_CHARSET,
+        DetectResult:     MAYBE_UTF8,
         DetectOffset:     2,
     },
 }

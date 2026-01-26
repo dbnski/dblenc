@@ -49,8 +49,8 @@ type Encoding byte
 const (
     UNKNOWN                  Encoding = 1 << iota
     ASCII
-    MAYBE_OTHER_CHARSET
-    OTHER_CHARSET
+    MAYBE_UTF8
+    UTF8
     MAYBE_DOUBLE_ENCODED
     DOUBLE_ENCODED_TRUNCATED
     DOUBLE_ENCODED
@@ -61,16 +61,16 @@ func (r Encoding) String() string {
     switch r {
     case ASCII:
         return "ascii"
-    case OTHER_CHARSET:
-        return "other-charset"
+    case MAYBE_UTF8:
+        return "maybe-utf8"
+    case UTF8:
+        return "utf8"
     case DOUBLE_ENCODED:
         return "double-encoded"
     case MAYBE_DOUBLE_ENCODED:
         return "maybe-double-encoded"
     case DOUBLE_ENCODED_TRUNCATED:
         return "double-encoded-truncated"
-    case MAYBE_OTHER_CHARSET:
-        return "maybe-other-charset"
     case ERROR:
         return "error"
     default:
@@ -181,7 +181,7 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
 
         if currentByte < 0x80 {                 // ascii?
             if r == UNKNOWN {                   // incomplete sequence followed by an ascii
-                return OTHER_CHARSET, c, e, f + i
+                return UTF8, c, e, f + i
             }
             a++
             c++
@@ -189,12 +189,12 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
             continue
         }
         if currentByte < 0xC0 {                 // 0x80 - 0xBF cannot appear stand-alone
-            return OTHER_CHARSET, c, e, f + i
+            return UTF8, c, e, f + i
         }
 
         m := m.next[currentByte]
         if m == nil {                           // byte sequence does not appear
-            return OTHER_CHARSET, c, e, f + i   // in the map
+            return UTF8, c, e, f + i   // in the map
         }
         if i == len(data) {                     // buffer ends mid-sequence
             return ERROR, c, e, f + i
@@ -230,24 +230,24 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
                 switch {
                 case x & 0xE0 == 0xC0:          // 2-byte code point
                     if x < 0xC2 {
-                        return OTHER_CHARSET, c, e, f + i
+                        return UTF8, c, e, f + i
                     }
                     s = 2
                 case x & 0xF0 == 0xE0:          // 3-byte code point
                     s = 3
                 case x & 0xF8 == 0xF0:          // 4-byte code point
                     if x >= 0xF5 {
-                        return OTHER_CHARSET, c, e, f + i
+                        return UTF8, c, e, f + i
                     }
                     s = 4
                 default:                        // not utf8
-                    return OTHER_CHARSET, c, e, f + i
+                    return UTF8, c, e, f + i
                 }
                 u = uint32(x)
                 r = UNKNOWN
             } else {                            // continuation bytes of decoded code point
                 if (x & 0xC0) != 0x80 {         // check if valid continuation byte
-                    return OTHER_CHARSET, c, e, f + i
+                    return UTF8, c, e, f + i
                 }
                 u = (u << 8) | uint32(x)
 
@@ -261,18 +261,18 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
                     if s == 3 {
                         // UTF16 code points
                         if u >= 0xEDA080 && u <= 0xEDBFBF {
-                            return OTHER_CHARSET, c, e, f + i
+                            return UTF8, c, e, f + i
                         }
                     }
                     if s == 4 {
                         // UTF16 code points
                         if u >= 0xF4908080 {
-                            return OTHER_CHARSET, c, e, f + i
+                            return UTF8, c, e, f + i
                         }
                     }
                     // out-of-scope code points
                     if u > 0xF3A087BF {
-                        return OTHER_CHARSET, c, e, f + i
+                        return UTF8, c, e, f + i
                     }
 
                     if d.onRune != nil {
@@ -295,7 +295,7 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
 
         m = m.next[currentByte]
         if m == nil {
-            return OTHER_CHARSET, c, e, f + (i - 1)
+            return UTF8, c, e, f + (i - 1)
         }
         if i == len(data) {
             return ERROR, c, e, f + i
@@ -331,24 +331,24 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
                 switch {
                 case x & 0xE0 == 0xC0:          // 2-byte code point
                     if x < 0xC2 {
-                        return OTHER_CHARSET, c, e, f + i
+                        return UTF8, c, e, f + i
                     }
                     s = 2
                 case x & 0xF0 == 0xE0:          // 3-byte code point
                     s = 3
                 case x & 0xF8 == 0xF0:          // 4-byte code point
                     if x >= 0xF5 {
-                        return OTHER_CHARSET, c, e, f + i
+                        return UTF8, c, e, f + i
                     }
                     s = 4
                 default:                        // not utf8
-                    return OTHER_CHARSET, c, e, f + i
+                    return UTF8, c, e, f + i
                 }
                 u = uint32(x)
                 r = UNKNOWN
             } else {                            // analyse continuation bytes
                 if (x & 0xC0) != 0x80 {         // check if valid continuation byte
-                    return OTHER_CHARSET, c, e, f + i
+                    return UTF8, c, e, f + i
                 }
                 u = (u << 8) | uint32(x)
 
@@ -362,18 +362,18 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
                     if s == 3 {
                         // UTF16 code points
                         if u >= 0xEDA080 && u <= 0xEDBFBF {
-                            return OTHER_CHARSET, c, e, f + i
+                            return UTF8, c, e, f + i
                         }
                     }
                     if s == 4 {
                         // UTF16 code points
                         if u >= 0xF4908080 {
-                            return OTHER_CHARSET, c, e, f + i
+                            return UTF8, c, e, f + i
                         }
                     }
                     // out-of-scope code points
                     if u > 0xF3A087BF {
-                        return OTHER_CHARSET, c, e, f + i
+                        return UTF8, c, e, f + i
                     }
 
                     if d.onRune != nil {
@@ -395,7 +395,7 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
         }
 
         // FOURTH BYTE
-        return OTHER_CHARSET, c, e, f + (i - 2) // no 4-byte code points exist
+        return UTF8, c, e, f + (i - 2) // no 4-byte code points exist
     }
 
     if r != ASCII && d.onRune != nil && sequenceLength > 0 {
@@ -406,7 +406,7 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
     case r == ASCII:
         // do not touch me
 
-    case r == OTHER_CHARSET:
+    case r == UTF8:
         panic("we should not be here")
 
     case r == ERROR:
@@ -415,13 +415,13 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
     case r == UNKNOWN:                          // if string ends halfway in what could be a double encoded character
         switch {
         case isLatin:                           // if all suspects are made exclusively of cp1252 letters,
-            r = MAYBE_OTHER_CHARSET             // assume the string is not double encoded (e.g. "Úžasná")
+            r = MAYBE_UTF8             // assume the string is not double encoded (e.g. "Úžasná")
 
         case e > 0:                             // if there's at least one other suspect,
             r = DOUBLE_ENCODED_TRUNCATED        // assume it's a truncated double encoded string (e.g. "MATÄšJ [..] Tomáš")
 
         case isClosingPunctuation(currentRune): // if it's the only suspect and the final char is "closing" punctuation (e.g. "qué¡"),
-            r = MAYBE_OTHER_CHARSET             // assume it's not double encoded
+            r = MAYBE_UTF8             // assume it's not double encoded
         }
 
     case r == DOUBLE_ENCODED:                   // if the string was classified as double encoded
@@ -430,7 +430,7 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
 
             if isLatin {                        // if the suspect is made exclusively of cp1252 letters
                 if isLanguage > 0 {             // and all those letters are used by the same language,
-                    r = MAYBE_OTHER_CHARSET     // assume it's not double encoded (e.g. "Úžasna")
+                    r = MAYBE_UTF8     // assume it's not double encoded (e.g. "Úžasna")
                 }
                 if isDecodedLanguage > 0 &&            // except if the decoded letter(s) is a known exception
                    isDecodedLanguage < ^Language(0) {  // like ĊČĎĚĞğġŌŞşŚƟΟ (e.g. "DoÄŸan" -> "Doğan")
