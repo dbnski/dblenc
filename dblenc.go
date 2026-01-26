@@ -106,13 +106,11 @@ func newByteMap() *byteMap {
     return root
 }
 
-type Callback func(...interface{})
-
 type Decoder struct {
     byteMap *byteMap
 
-    onRune      Callback
-    onTransform Callback
+    onRune      func([]byte)
+    onTransform func(Encoding, []byte)
 }
 
 func NewDecoder() *Decoder {
@@ -121,12 +119,12 @@ func NewDecoder() *Decoder {
     }
 }
 
-func (d *Decoder) OnRune(callback Callback) *Decoder {
+func (d *Decoder) OnRune(callback func([]byte)) *Decoder {
     d.onRune = callback
     return d
 }
 
-func (d *Decoder) OnTransform(callback Callback) *Decoder {
+func (d *Decoder) OnTransform(callback func(Encoding, []byte)) *Decoder {
     d.onTransform = callback
     return d
 }
@@ -161,7 +159,7 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
     u := uint32(0)  // decoded code unit sequence
     s := uint8(1)   // decoded code unit sequence length
     n := uint8(0)   // decoded code units counter
-
+    p := -1
     o := len(data)  // position of the first double-encoded sequence
 
     var currentRune rune
@@ -219,13 +217,15 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
                 isLatin = latin
             }
 
-            if e > 0 {
+            if !isMultiple && e > 0 {
                 isMultiple = runeSequence[sequenceLength] != currentRune
             }
             runeSequence[sequenceLength] = currentRune
             sequenceLength++
 
             if n == 1 {                         // first byte of decoded code point
+                p = i - 2
+
                 switch {
                 case x & 0xE0 == 0xC0:          // 2-byte code point
                     if x < 0xC2 {
@@ -269,7 +269,7 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
                     }
 
                     if d.onRune != nil {
-                        d.onRune(sequenceLength, runeSequence)
+                        d.onRune(data[p:i])
                     }
 
                     r = DOUBLE_ENCODED
@@ -314,13 +314,15 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
                 isLatin = latin
             }
 
-            if e > 0 {
+            if !isMultiple && e > 0 {
                 isMultiple = runeSequence[sequenceLength] != currentRune
             }
             runeSequence[sequenceLength] = currentRune
             sequenceLength++
 
             if n == 1 {                         // analyse the first byte
+                p = i - 3
+
                 switch {
                 case x & 0xE0 == 0xC0:          // 2-byte code point
                     if x < 0xC2 {
@@ -364,7 +366,7 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
                     }
 
                     if d.onRune != nil {
-                        d.onRune(sequenceLength, runeSequence)
+                        d.onRune(data[p:i])
                     }
 
                     r = DOUBLE_ENCODED
@@ -385,8 +387,8 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
         return UTF8, c, e, f + (i - 2) // no 4-byte code points exist
     }
 
-    if r != ASCII && d.onRune != nil && sequenceLength > 0 {
-        d.onRune(sequenceLength, runeSequence)
+    if d.onRune != nil && sequenceLength > 0 {
+        d.onRune(data[p:i])
     }
 
     switch {
