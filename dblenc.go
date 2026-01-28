@@ -404,13 +404,13 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
     case r == UNKNOWN:                          // if string ends halfway in what could be a double encoded character
         switch {
         case isLatin:                           // if all suspects are made exclusively of cp1252 letters,
-            r = MAYBE_UTF8             // assume the string is not double encoded (e.g. "Úžasná")
+            r = MAYBE_UTF8                      // assume the string is not double encoded (e.g. "Úžasná")
 
         case e > 0:                             // if there's at least one other suspect,
             r = DOUBLE_ENCODED_TRUNCATED        // assume it's a truncated double encoded string (e.g. "MATÄšJ [..] Tomáš")
 
         case isClosingPunctuation(currentRune): // if it's the only suspect and the final char is "closing" punctuation (e.g. "qué¡"),
-            r = MAYBE_UTF8             // assume it's not double encoded
+            r = MAYBE_UTF8                      // assume it's not double encoded
         }
 
     case r == DOUBLE_ENCODED:                   // if the string was classified as double encoded
@@ -419,7 +419,7 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
 
             if isLatin {                        // if the suspect is made exclusively of cp1252 letters
                 if isLanguage > 0 {             // and all those letters are used by the same language,
-                    r = MAYBE_UTF8     // assume it's not double encoded (e.g. "Úžasna")
+                    r = MAYBE_UTF8              // assume it's not double encoded (e.g. "Úžasna")
                 }
                 if isDecodedLanguage > 0 &&            // except if the decoded letter(s) is a known exception
                    isDecodedLanguage < ^Language(0) {  // like ĊČĎĚĞğġŌŞşŚƟΟ (e.g. "DoÄŸan" -> "Doğan")
