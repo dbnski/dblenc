@@ -135,8 +135,12 @@ func (d *Decoder) OnTransform(callback func(Encoding, []byte)) *Decoder {
     return d
 }
 
-// The function tests a byte slice for presence of double-encoded
-// characters. 
+// Detect classifies data as ASCII, UTF-8, or (possibly) double-encoded.
+// It returns the classification, the number of code points read, the number
+// of double-encoded code points found, and a 1-based offset: for double-
+// encoded results, the start of the first double-encoded sequence; otherwise
+// the position of the character (or start of the sequence) that decided the
+// classification.
 func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
     // fast path for strings with long ascii prefixes
     f := 0
