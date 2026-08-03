@@ -106,6 +106,12 @@ func newByteMap() *byteMap {
     return root
 }
 
+var theByteMap *byteMap
+
+func init() {
+    theByteMap = newByteMap()
+}
+
 type Decoder struct {
     byteMap *byteMap
 
@@ -115,7 +121,7 @@ type Decoder struct {
 
 func NewDecoder() *Decoder {
     return &Decoder{
-        byteMap: newByteMap(),
+        byteMap: theByteMap,
     }
 }
 
