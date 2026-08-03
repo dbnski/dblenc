@@ -738,6 +738,26 @@ var testCases = []TestCase{
         DetectResult:     MAYBE_UTF8,
         DetectOffset:     2,
     },
+    {
+        Name:             "Decodes_To_UTF16_Surrogate",  // eda080
+        TestStringHex:    decode("c3adc2a0e282ac"),
+        TransformHex:     nil,
+        TransformError:   ErrInvalid,
+        TransformedHex:   decode("c3adc2a0e282ac"),
+        TransformedError: ErrNoop,
+        DetectResult:     UTF8,
+        DetectOffset:     7,
+    },
+    {
+        Name:             "Decodes_To_Out_Of_Scope",     // f4808080
+        TestStringHex:    decode("c3b4e282ace282ace282ac"),
+        TransformHex:     nil,
+        TransformError:   ErrInvalid,
+        TransformedHex:   decode("c3b4e282ace282ace282ac"),
+        TransformedError: ErrNoop,
+        DetectResult:     UTF8,
+        DetectOffset:     11,
+    },
 }
 
 var (

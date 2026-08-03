@@ -599,6 +599,7 @@ func (d *Decoder) transform(src []byte) (dst []byte, err error) {
                 default:                        // not utf8
                     return nil, ErrInvalid
                 }
+                u = uint32(x)
             } else {                            // continuation bytes of decoded code point
                 if (x & 0xC0) != 0x80 {         // check if valid continuation byte
                     return nil, ErrInvalid
@@ -665,6 +666,7 @@ func (d *Decoder) transform(src []byte) (dst []byte, err error) {
                 default:                        // not utf8
                     return nil, ErrInvalid
                 }
+                u = uint32(x)
             } else {                            // continuation bytes of decoded code point
                 if (x & 0xC0) != 0x80 {         // check if valid continuation byte
                     return nil, ErrInvalid
