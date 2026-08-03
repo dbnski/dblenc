@@ -758,6 +758,62 @@ var testCases = []TestCase{
         DetectResult:     UTF8,
         DetectOffset:     11,
     },
+    {
+        Name:             "Decodes_To_Overlong_3_Byte",  // e08080
+        TestStringHex:    decode("c3a0e282ace282ac"),
+        TransformHex:     nil,
+        TransformError:   ErrInvalid,
+        TransformedHex:   decode("c3a0e282ace282ac"),
+        TransformedError: ErrNoop,
+        DetectResult:     UTF8,
+        DetectOffset:     5,
+    },
+    {
+        Name:             "Decodes_To_Overlong_3_Byte_Max",  // e09fbf
+        TestStringHex:    decode("c3a0c5b8c2bf"),
+        TransformHex:     nil,
+        TransformError:   ErrInvalid,
+        TransformedHex:   decode("c3a0c5b8c2bf"),
+        TransformedError: ErrNoop,
+        DetectResult:     UTF8,
+        DetectOffset:     4,
+    },
+    {
+        Name:             "Decodes_To_Shortest_3_Byte",  // e0a080, first valid one
+        TestStringHex:    decode("c3a0c2a0e282ac"),
+        TransformHex:     decode("e0a080"),
+        TransformedHex:   decode("e0a080"),
+        DetectResult:     MAYBE_DOUBLE_ENCODED,
+        DetectOffset:     1,
+    },
+    {
+        Name:             "Decodes_To_Overlong_4_Byte",  // f0808080
+        TestStringHex:    decode("c3b0e282ace282ace282ac"),
+        TransformHex:     nil,
+        TransformError:   ErrInvalid,
+        TransformedHex:   decode("c3b0e282ace282ace282ac"),
+        TransformedError: ErrNoop,
+        DetectResult:     UTF8,
+        DetectOffset:     5,
+    },
+    {
+        Name:             "Decodes_To_Overlong_4_Byte_Max",  // f08fbfbf
+        TestStringHex:    decode("c3b0c28fc2bfc2bf"),
+        TransformHex:     nil,
+        TransformError:   ErrInvalid,
+        TransformedHex:   decode("c3b0c28fc2bfc2bf"),
+        TransformedError: ErrNoop,
+        DetectResult:     UTF8,
+        DetectOffset:     4,
+    },
+    {
+        Name:             "Decodes_To_Shortest_4_Byte",  // f0908080, first valid one
+        TestStringHex:    decode("c3b0c290e282ace282ac"),
+        TransformHex:     decode("f0908080"),
+        TransformedHex:   decode("f0908080"),
+        DetectResult:     MAYBE_DOUBLE_ENCODED,
+        DetectOffset:     1,
+    },
 }
 
 var (

@@ -250,6 +250,11 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
                 }
                 u = (u << 8) | uint32(x)
 
+                // overlong 3- and 4-byte code points
+                if n == 2 && ((u >= 0xE080 && u <= 0xE09F) || (u >= 0xF080 && u <= 0xF08F)) {
+                    return UTF8, c, e, f + i
+                }
+
                 if n == s {                     // decoded complete code unit sequence
                     if s == 2 {
                         decodedRune := rune((((u >> 8) & 0x1F) << 6) | ((u & 0xFF) & 0x3F))
@@ -346,6 +351,11 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
                     return UTF8, c, e, f + i
                 }
                 u = (u << 8) | uint32(x)
+
+                // overlong 3- and 4-byte code points
+                if n == 2 && ((u >= 0xE080 && u <= 0xE09F) || (u >= 0xF080 && u <= 0xF08F)) {
+                    return UTF8, c, e, f + i
+                }
 
                 if n == s {                     // decoded complete code unit sequence
                     if s == 2 {
@@ -606,6 +616,11 @@ func (d *Decoder) transform(src []byte) (dst []byte, err error) {
                 }
                 u = (u << 8) | uint32(x)
 
+                // overlong 3- and 4-byte code points
+                if n == 2 && ((u >= 0xE080 && u <= 0xE09F) || (u >= 0xF080 && u <= 0xF08F)) {
+                    return nil, ErrInvalid
+                }
+
                 if n == s {                     // decoded complete code unit sequence
                     if s == 3 {
                         // UTF16 code points
@@ -672,6 +687,11 @@ func (d *Decoder) transform(src []byte) (dst []byte, err error) {
                     return nil, ErrInvalid
                 }
                 u = (u << 8) | uint32(x)
+
+                // overlong 3- and 4-byte code points
+                if n == 2 && ((u >= 0xE080 && u <= 0xE09F) || (u >= 0xF080 && u <= 0xF08F)) {
+                    return nil, ErrInvalid
+                }
 
                 if n == s {                     // decoded complete code unit sequence
                     if s == 3 {
