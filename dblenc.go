@@ -277,7 +277,7 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
                             return UTF8, c, e, f + i
                         }
                     } else if s == 4 {
-                        // out-of-scope code points
+                        // beyond U+E01FF: unassigned or private use only
                         if u > 0xF3A087BF {
                             return UTF8, c, e, f + i
                         }
@@ -379,7 +379,7 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
                             return UTF8, c, e, f + i
                         }
                     } else if s == 4 {
-                        // out-of-scope code points
+                        // beyond U+E01FF: unassigned or private use only
                         if u > 0xF3A087BF {
                             return UTF8, c, e, f + i
                         }
@@ -638,7 +638,7 @@ func (d *Decoder) transform(src []byte) (dst []byte, err error) {
                             return nil, ErrInvalid
                         }
                     } else if s == 4 {
-                        // out-of-scope code points
+                        // beyond U+E01FF: unassigned or private use only
                         if u > 0xF3A087BF {
                             return nil, ErrInvalid
                         }
@@ -710,7 +710,7 @@ func (d *Decoder) transform(src []byte) (dst []byte, err error) {
                             return nil, ErrInvalid
                         }
                     } else if s == 4 {
-                        // out-of-scope code points
+                        // beyond U+E01FF: unassigned or private use only
                         if u > 0xF3A087BF {
                             return nil, ErrInvalid
                         }
