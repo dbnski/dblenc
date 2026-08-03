@@ -220,9 +220,9 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
             currentRune = rune(firstByte & 0x1F) << 6 | rune(currentByte & 0x3F)
             if isLatin {
                 latin := false
-                if int(currentRune) < len(Diacritics) {
-                    latin = Diacritics[currentRune] > 0
-                    isLanguage = isLanguage & Diacritics[currentRune]
+                if int(currentRune) < len(diacritics) {
+                    latin = diacritics[currentRune] > 0
+                    isLanguage = isLanguage & diacritics[currentRune]
                 }
                 isLatin = latin
             }
@@ -268,8 +268,8 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
                 if n == s {                     // decoded complete code unit sequence
                     if s == 2 {
                         decodedRune := rune((((u >> 8) & 0x1F) << 6) | ((u & 0xFF) & 0x3F))
-                        if int(decodedRune) < len(DecodedDiacritics) {
-                            isDecodedLanguage = isDecodedLanguage & DecodedDiacritics[decodedRune]
+                        if int(decodedRune) < len(decodedDiacritics) {
+                            isDecodedLanguage = isDecodedLanguage & decodedDiacritics[decodedRune]
                         }
                     } else if s == 3 {
                         // UTF16 code points
@@ -322,9 +322,9 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
             currentRune = rune(firstByte & 0x0F) << 12 | rune(secondByte & 0x3F) << 6 | rune(currentByte & 0x3F)
             if isLatin {
                 latin := false
-                if int(currentRune) < len(Diacritics) {
-                    latin = Diacritics[currentRune] > 0
-                    isLanguage = isLanguage & Diacritics[currentRune]
+                if int(currentRune) < len(diacritics) {
+                    latin = diacritics[currentRune] > 0
+                    isLanguage = isLanguage & diacritics[currentRune]
                 }
                 isLatin = latin
             }
@@ -370,8 +370,8 @@ func (d *Decoder) Detect(data []byte) (Encoding, int, int, int) {
                 if n == s {                     // decoded complete code unit sequence
                     if s == 2 {
                         decodedRune := rune((((u >> 8) & 0x1F) << 6) | ((u & 0xFF) & 0x3F))
-                        if int(decodedRune) < len(DecodedDiacritics) {
-                            isDecodedLanguage = isDecodedLanguage & DecodedDiacritics[decodedRune]
+                        if int(decodedRune) < len(decodedDiacritics) {
+                            isDecodedLanguage = isDecodedLanguage & decodedDiacritics[decodedRune]
                         }
                     } else if s == 3 {
                         // UTF16 code points

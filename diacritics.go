@@ -35,7 +35,7 @@ const (
 )
 
 // Letters with diacritics
-var Diacritics = [0x0400]Language{
+var diacritics = [0x0400]Language{
     // 0x00A1: L_ES,                                                                // ¡
     // 0x00BF: L_ES,                                                                // ¿
     0x00C0: L_FR | L_IT | L_PT | L_CY,                                           // À
@@ -107,7 +107,7 @@ var Diacritics = [0x0400]Language{
     0x017E: L_CZ | L_SK | L_ET,                                                  // ž
 }
 
-var DecodedDiacritics = [0x0400]Language{
+var decodedDiacritics = [0x0400]Language{
     0x010A: L_MT,                                                                // Ċ
     0x010C: L_CZ | L_SK,                                                         // Č
     0x010E: L_CZ | L_SK,                                                         // Ď
